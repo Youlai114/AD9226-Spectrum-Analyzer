@@ -140,6 +140,9 @@ def build():
         ['文档/代码阅读引导.docx', '代码从哪读起 + 已知边界与 BUG 清单'],
         ['文档/程序对照注释手册.docx', '逐模块实现细节与取舍'],
         ['AD9226_FPGA_V1.1_65M/, hdmi_spectrum/, ad9226_tangnano20k/', '历史参考工程 (前者 Altera 原厂例程, 后两者为前身), 可只读'],
+        ['VERSION / CHANGELOG.md', '版本号 (当前 1.0.0) 与变更记录; 发布打包见 4.6'],
+        ['git 仓库 (v1.0.0 标签)', '全工程版本管理; release/ 为发布 zip'],
+        ['ad9226_hdmi_spectrum/doc/hardware/', '硬件设计文件归档位 (原理图/PCB 待原作者放入)'],
     ], [10.5, 5.0], size=9)
 
     # ================= 3 环境与工具链 =================
@@ -185,6 +188,18 @@ def build():
          'python 文档/gen_reading_guide.py   # 代码阅读引导\n'
          'python 文档/gen_reading_guide.py 的内容源为 CODE_GUIDE.md 之前的手写版,'
          ' 改内容请直接编辑本脚本')
+    h2(doc, '4.6 发布打包')
+    code(doc,
+         'python ad9226_hdmi_spectrum/tools/make_release.py\n'
+         '# 产出 release/spectrum_v<版本>_<日期>.zip (比特流+全部文档+源码+脚本)\n'
+         '# 版本号在根目录 VERSION; 每次发布须在 CHANGELOG.md 追加条目并 git 提交')
+    h2(doc, '4.7 版本管理规范')
+    para(doc, '工程为 git 仓库, 基线标签 v1.0.0。改动流程: 改 RTL -> bash '
+              'tools/run_regression.sh (6/6) -> gw_sh build.tcl -> 更新 VERSION 与 '
+              'CHANGELOG.md -> git commit -> 需要发布时打标签并跑 make_release.py。'
+              '注意: 版本号语义为 主.次.修 (主=架构大改, 次=新功能, 修=缺陷修复); '
+              'git 身份为本机占位配置 (AD9226-project@local), 接手者请改为本人信息: '
+              'git config user.name/user.email。')
     h2(doc, '4.5 改了界面文字/版面 (spec_display 的 put 调用)')
     para(doc, '文字全部在 spec_display.v 的运行时解码器里 (按 cell_row 分组的 put 调用), '
               '参数顺序为 (列, 行, 长度, 字符串, 颜色)——与 gen_font.py 一致。改完必须：'
