@@ -102,7 +102,7 @@ def build():
     cn(p.add_run('项目交接文档\nAD9226 数字频谱分析仪 (FPGA 固件)'), '黑体', 18, True)
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    cn(p.add_run('交接日期: 2025-10-25    工程目录: D:/code/AD9226_Nano20K_Slink'), '宋体', 10)
+    cn(p.add_run('交接日期: 2026-10-25    工程目录: D:/code/AD9226_Nano20K_Slink'), '宋体', 10)
 
     # ================= 1 项目状态 =================
     h1(doc, '1  项目状态总览')
