@@ -1,0 +1,102 @@
+m255
+K3
+13
+cModel Technology
+Z0 dD:\code\AD9226_Nano20K_Slink\ad9226_hdmi_spectrum\sim
+T_opt
+VI8b]=T^R=_@;ngami^z>N2
+04 6 4 work tb_fft fast 0
+=1-088fc3f16d21-6ad5dec2-180-1d4
+o-quiet -auto_acc_if_foreign -work work
+n@_opt
+OE;O;10.1a;51
+vad9226_capture
+!s100 d?TD]I49dj>;e<P=g5LXO2
+IU;n2X9dchRlMV<V4RfcX60
+V^b8^_gg>VHSPS<9h;3jL:1
+Z1 dD:\code\AD9226_Nano20K_Slink\ad9226_hdmi_spectrum\sim
+w1792400711
+8../src/ad9226_capture.v
+F../src/ad9226_capture.v
+L0 24
+Z2 OE;L;10.1a;51
+r1
+31
+Z3 !s108 1792401088.778000
+Z4 !s107 tb_fft.v|../src/fft_tables.v|../src/fft2048.v|../src/ad9226_capture.v|
+Z5 !s90 -quiet|../src/ad9226_capture.v|../src/fft2048.v|../src/fft_tables.v|tb_fft.v|
+Z6 o-quiet -L mtiAvm -L mtiOvm -L mtiUvm -L mtiUPF
+!i10b 1
+!s85 0
+vfft2048
+IdE>z^O<`ffngXWMg@MR1J1
+V]L1mD;?5F71?]=aINXE[K2
+R1
+w1792401082
+8../src/fft2048.v
+F../src/fft2048.v
+L0 21
+R2
+r1
+31
+R3
+R4
+R5
+R6
+!i10b 1
+!s100 K;aFDo>VgTKli=m@OX0XB3
+!s85 0
+vhann_rom
+!s100 ;mmk3jhPgz10bVN0XK=;33
+I1Ki:7PFneJ[[a7b2mRC=O0
+VilW?BcEOVD;JgmoQ5ji9V3
+R1
+Z7 w1792400656
+Z8 8../src/fft_tables.v
+Z9 F../src/fft_tables.v
+L0 9
+R2
+r1
+31
+R3
+R4
+R5
+R6
+!i10b 1
+!s85 0
+vtb_fft
+!s100 de<:limA87PKT_ZHQmgUC3
+IbM;jaXATYM?U3ld=AzAh21
+VW]k<liR9La45FL`eOgGLT3
+R1
+w1792401067
+8tb_fft.v
+Ftb_fft.v
+L0 14
+R2
+r1
+31
+R3
+R4
+R5
+R6
+!i10b 1
+!s85 0
+vtwiddle_rom
+!s100 BXRJT5Y^SO0<l`3gi94nJ2
+IAkMX:YNGQ1of]1B=Vi7E13
+V?@N_Xi2kgUX`[3JBGH=Mk1
+R1
+R7
+R8
+R9
+L0 2068
+R2
+r1
+31
+R3
+R4
+R5
+R6
+!i10b 1
+!s85 0

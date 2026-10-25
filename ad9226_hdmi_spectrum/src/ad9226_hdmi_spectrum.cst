@@ -1,0 +1,123 @@
+// ============================================================================
+// ad9226_hdmi_spectrum.cst  --  引脚约束 (Tang Nano 20K / GW2AR-LV18QN88C8/I7)
+//
+//   板载资源 (不可更改):
+//     I_clk  = 4    (27MHz 晶振)     I_rst = 88 (S2, 硬件复位)
+//     HDMI   = 33..40
+//   人机界面已全部移到打板底板 (见下面), 板载 S1 和 6 只 LED 不再由本工程驱动
+//     HDMI   = 33..40 (4 对 LVDS)
+//
+//   AD9226 的 14 根线全部接两侧 2x10 排针 (2.54mm), 并避开了有复用功能的脚:
+//     避开 85/86 (SPI Flash D1/D0)  80 (Flash D2)   79 (WS2812_DIN)
+//          51 (PA_EN)  52/53 (HDMI EDID I2C)
+//     54/55/56 是 SSPI 专用脚, 综合会直接报 "cannot be placed" —— 也不能用
+//
+//   (J5/J6 是本工程的记法: J6 = 靠 USB/HDMI 一侧的右排, J5 = 左排; 板上丝印以实际为准)
+//   ---- 排针 J6 (右侧, 从 USB 口往下数) ----
+//     序号:  1    2    3    4    5    6    7    8    9    10   11   12   13   14   15   16   17   18   19   20
+//     功能:  5V   GND  76   80   42   41   56   54   51   48   55   49   86   79   GND  3V3  72   71   53   52
+//     AD9226:          CLK       OTR  D11
+//
+//   ---- 排针 J5 (左侧) ----
+//     序号:  1    2    3    4    5    6    7    8    9    10   11   12   13   14   15   16   17   18   19   20
+//     功能:  73   74   75   85   77   15   16   27   28   25   26   29   30   31   17   20   19   18   3V3  GND
+//     AD9226: D0   D1   D2        D3                            D4   D5   D6   D7   D8   D9   D10
+//
+//   ---- 打板底板新增 (5 键 + EC11 + 2 灯) ----
+//     KEY1..KEY5 = 15,16,17,18,19      (J5 原 LED 脚)
+//     EC11 A/B/SW = 48,49,72           (J6)
+//     LED_STAT/OVR = 20,71
+//     板载 S1(87) 不再使用; S2(88) 仍作硬件复位
+//
+//   ---- AD9226 模块侧 (P2 为 2x10 排针) ----
+//     5V  GND  CLK  OTR  D0..D11      (以模块丝印为准)
+//
+//   完整对照表 / 电平与时序说明见 doc/引脚对照与约束.md
+// ============================================================================
+
+// ---------------- 板载: 27MHz 晶振 ----------------
+IO_LOC "I_clk" 4;
+IO_PORT "I_clk" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---------------- 板载: 按键 ----------------
+IO_LOC "I_rst" 88;
+IO_PORT "I_rst" IO_TYPE=LVCMOS33 PULL_MODE=DOWN SINGLE_RESISTOR=ON BANK_VCCIO=3.3;
+// 板载 S1 (87) 不再使用: 按键移到打板底板, 见下面的 I_key[0..4]
+
+// ---------------- 打板: 人机界面 (5 键 + EC11 + 2 灯) ----------------
+//   按键: 一端接 GND, 另一端接引脚, 板上 10k 上拉到 3.3V —— 按下为低
+//   编码器: A/B 各 10k 上拉到 3V3 (必须, 机械触点需要上拉); C(公共端) 接 GND;
+//           消抖电容默认不装 (软件已做), 只留 0603 焊盘; 要装也只能 10nF
+//   LED: 3V3 -> 1k -> LED -> 引脚 (低电平点亮, 与板载 LED 同极性)
+
+IO_LOC "I_key[0]" 15;      // KEY1  Span 循环
+IO_PORT "I_key[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_key[1]" 16;      // KEY2  预留 (Ref Level)
+IO_PORT "I_key[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_key[2]" 17;      // KEY3  AUTO 自动跨度
+IO_PORT "I_key[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_key[3]" 18;      // KEY4  光标开关 (开: 编码器移光标, 关: 编码器调跨度)
+IO_PORT "I_key[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_key[4]" 19;      // KEY5  Preset
+IO_PORT "I_key[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+IO_LOC "I_enc_a" 48;       // EC11 A
+IO_PORT "I_enc_a" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_enc_b" 49;       // EC11 B
+IO_PORT "I_enc_b" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_enc_sw" 72;      // EC11 按压开关
+IO_PORT "I_enc_sw" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+IO_LOC "O_led[0]" 20;      // LED_STAT 心跳
+IO_PORT "O_led[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "O_led[1]" 71;      // LED_OVR  过载
+IO_PORT "O_led[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------------- HDMI (4 对 LVDS, 不可改) ----------------
+IO_LOC "O_tmds_clk_p" 33,34;
+IO_PORT "O_tmds_clk_p" IO_TYPE=LVDS25 PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+IO_LOC "O_tmds_data_p[0]" 35,36;
+IO_PORT "O_tmds_data_p[0]" IO_TYPE=LVDS25 PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+IO_LOC "O_tmds_data_p[1]" 37,38;
+IO_PORT "O_tmds_data_p[1]" IO_TYPE=LVDS25 PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+IO_LOC "O_tmds_data_p[2]" 39,40;
+IO_PORT "O_tmds_data_p[2]" IO_TYPE=LVDS25 PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+
+// ============================================================================
+// AD9226 接口 (14 根: 1 时钟 + 12 数据 + 1 OTR)
+// ============================================================================
+// ---- 采样时钟 54MHz -> AD9226 CLK (J6 第 3 脚, 紧挨 GND, 回流通路最短) ----
+IO_LOC "O_clk_adc" 76;
+IO_PORT "O_clk_adc" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ---- 数据 D0..D7 (J6 连续排布) ----
+IO_LOC "I_adc_d[0]" 73;
+IO_PORT "I_adc_d[0]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[1]" 74;
+IO_PORT "I_adc_d[1]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[2]" 75;
+IO_PORT "I_adc_d[2]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[3]" 77;
+IO_PORT "I_adc_d[3]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[4]" 27;
+IO_PORT "I_adc_d[4]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[5]" 28;
+IO_PORT "I_adc_d[5]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[6]" 25;
+IO_PORT "I_adc_d[6]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[7]" 26;
+IO_PORT "I_adc_d[7]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+
+// ---- 数据 D8..D11 (J5 连续排布) ----
+IO_LOC "I_adc_d[8]" 29;
+IO_PORT "I_adc_d[8]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[9]" 30;
+IO_PORT "I_adc_d[9]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[10]" 31;
+IO_PORT "I_adc_d[10]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[11]" 41;
+IO_PORT "I_adc_d[11]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+
+// ---- OTR 过压标志 (J6) ----
+IO_LOC "I_adc_otr" 42;
+IO_PORT "I_adc_otr" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;

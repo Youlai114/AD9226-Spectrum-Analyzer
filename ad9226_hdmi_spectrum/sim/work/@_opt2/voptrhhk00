@@ -1,0 +1,20 @@
+library verilog;
+use verilog.vl_types.all;
+entity wave_display is
+    port(
+        I_pix_clk       : in     vl_logic;
+        I_pix_rst_n     : in     vl_logic;
+        I_x             : in     vl_logic_vector(11 downto 0);
+        I_y             : in     vl_logic_vector(11 downto 0);
+        I_span          : in     vl_logic_vector(2 downto 0);
+        I_wr_clk        : in     vl_logic;
+        I_wr_rst_n      : in     vl_logic;
+        I_frame_start   : in     vl_logic;
+        I_wr_en         : in     vl_logic;
+        I_wr_addr       : in     vl_logic_vector(9 downto 0);
+        I_wr_mag        : in     vl_logic_vector(15 downto 0);
+        O_r             : out    vl_logic_vector(7 downto 0);
+        O_g             : out    vl_logic_vector(7 downto 0);
+        O_b             : out    vl_logic_vector(7 downto 0)
+    );
+end wave_display;

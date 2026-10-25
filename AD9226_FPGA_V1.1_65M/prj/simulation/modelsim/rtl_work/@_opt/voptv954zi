@@ -1,0 +1,51 @@
+m255
+K3
+13
+cModel Technology
+Z0 dD:\Ddisk\FPGA\quartus\KV\AD9226\AD9226_FPGA_V1.0\prj\simulation\modelsim
+T_opt
+Z1 V=b3Ck?IEM7WOVTihXP14=1
+Z2 04 14 4 work AD9226_TEST_tb fast 0
+Z3 =1-b42e998166aa-5e142128-264-9bea0
+Z4 o-quiet -auto_acc_if_foreign -work work -L altera_ver -L lpm_ver -L sgate_ver -L altera_mf_ver -L altera_lnsim_ver -L cycloneive_ver -L rtl_work -L work +acc
+Z5 n@_opt
+Z6 OL;O;10.0c;49
+Z7 dD:\Ddisk\FPGA\quartus\KV\AD9226\AD9226_FPGA_V1.0\prj\simulation\modelsim
+vAD9220_ReadModule
+Z8 I2n;VB1X>6hTUgfhh:o0CB2
+Z9 VE[h]SDR8I^NRjN[^YYYXj2
+R7
+Z10 w1578376167
+Z11 8D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/rtl/AD9220_ReadModule.V
+Z12 FD:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/rtl/AD9220_ReadModule.V
+L0 1
+Z13 OL;L;10.0c;49
+r1
+31
+Z14 o-vlog01compat -work work -L mtiAvm -L mtiOvm -L mtiUvm -L mtiUPF
+Z15 n@a@d9220_@read@module
+Z16 !s100 D_cg[49Qi>_ZKoW7n1f@Q0
+!s85 0
+Z17 !s108 1578377511.334000
+Z18 !s107 D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/rtl/AD9220_ReadModule.V|
+Z19 !s90 -reportprogress|300|-vlog01compat|-work|work|+incdir+D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/rtl|D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/rtl/AD9220_ReadModule.V|
+Z20 !s92 -vlog01compat -work work +incdir+D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/rtl -L mtiAvm -L mtiOvm -L mtiUvm -L mtiUPF
+vAD9226_TEST_tb
+Z21 Ieg3TXSF<MU??WeP`2Pn?82
+Z22 V;08R?9HYz=j4K1GFmQFJ63
+R7
+Z23 w1578376282
+Z24 8D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/prj/../testbench/AD9226_TEST_tb.V
+Z25 FD:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/prj/../testbench/AD9226_TEST_tb.V
+L0 4
+R13
+r1
+31
+R14
+Z26 n@a@d9226_@t@e@s@t_tb
+Z27 !s100 G]Ug9kMW]m5>YcAQ4H:6m3
+!s85 0
+Z28 !s108 1578377511.531000
+Z29 !s107 D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/prj/../testbench/AD9226_TEST_tb.V|
+Z30 !s90 -reportprogress|300|-vlog01compat|-work|work|+incdir+D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/prj/../testbench|D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/prj/../testbench/AD9226_TEST_tb.V|
+Z31 !s92 -vlog01compat -work work +incdir+D:/Ddisk/FPGA/quartus/KV/AD9226/AD9226_FPGA_V1.0/prj/../testbench -L mtiAvm -L mtiOvm -L mtiUvm -L mtiUPF

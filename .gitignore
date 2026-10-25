@@ -1,0 +1,30 @@
+# ---- Python ----
+.venv/
+__pycache__/
+
+# ---- AI 助手记忆目录 ----
+.workbuddy/
+.workbuddy-ai/
+
+# ---- ModelSim (work 库/日志/输出可全部再生) ----
+sim/work/
+sim/transcript
+sim/*.log
+sim/out/
+sim/frames/*.ppm
+
+# ---- Gowin 中间产物 (保留 .fs 比特流与 rpt.txt 时序摘要) ----
+ad9226_hdmi_spectrum/impl/gwsynthesis/
+ad9226_hdmi_spectrum/impl/temp/
+ad9226_hdmi_spectrum/impl/pnr/*
+!ad9226_hdmi_spectrum/impl/pnr/ad9226_hdmi_spectrum.fs
+!ad9226_hdmi_spectrum/impl/pnr/*.rpt.txt
+ad9226_hdmi_spectrum/build.log
+
+# ---- 历史工程的 EDA 中间产物 ----
+AD9226_FPGA_V1.1_65M/prj/db/
+AD9226_FPGA_V1.1_65M/prj/greybox_tmp/
+AD9226_FPGA_V1.1_65M/prj/incremental_db/
+hdmi_spectrum/impl/
+*.bak
+*.ppm

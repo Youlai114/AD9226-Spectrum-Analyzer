@@ -1,0 +1,20 @@
+Info: Start Nativelink Simulation process
+
+========= EDA Simulation Settings =====================
+
+Sim Mode              :  Gate
+Family                :  cycloneive
+Quartus root          :  c:/altera/11.0/quartus/bin64/
+Quartus sim root      :  c:/altera/11.0/quartus/eda/sim_lib
+Simulation Tool       :  modelsim
+Simulation Language   :  verilog
+Simulation Mode       :  GUI
+Sim Output File       :  AD9226TEST_8_1200mv_85c_slow.vo
+Sim SDF File       :  AD9226TEST_8_1200mv_85c_v_slow.sdo
+Sim dir               :  simulation\modelsim
+
+=======================================================
+
+Info: Starting NativeLink simulation with ModelSim software
+Sourced NativeLink script c:/altera/11.0/quartus/common/tcl/internal/nativelink/modelsim.tcl
+Info: Spawning ModelSim Simulation software 

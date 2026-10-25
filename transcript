@@ -1,0 +1,5 @@
+# vsim +F0=250e3 +AMP=2040 +DEC=0 +WIN=3 -do {run -all; quit -f} -c work.tb_fft 
+# ** Error: (vsim-19) Failed to access library 'work' at "work".
+# 
+# No such file or directory. (errno = ENOENT)
+# Error loading design
