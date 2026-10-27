@@ -12,6 +12,7 @@
 *.ipc   text eol=lf
 *.txt   text eol=lf
 VERSION text eol=lf
+LICENSE text eol=lf
 
 # 二进制: 不做行尾转换
 *.docx binary

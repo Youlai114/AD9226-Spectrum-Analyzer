@@ -1,5 +1,9 @@
 # AD9226 + HDMI 数字频谱分析仪（Tang Nano 20K / GW2AR-18）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
+[![Language](https://img.shields.io/badge/HDL-Verilog-orange.svg)](#)
+
 用一片 **高云 Tang Nano 20K**（GW2AR-18C）直采 **AD9226 12bit / 54 MSPS** ADC，
 在片上做 **4096 点 FFT**，把频谱、瀑布图和时域波形直接送到 **HDMI 显示器**。
 没有 MCU、没有上位机软件 —— 上电即出图。
@@ -133,7 +137,7 @@ AD9226 的 14 根线全部走两侧 2×10 排针，避开所有复用脚（SPI F
 
 ---
 
-## 7. 许可
+## 7. 许可证
 
-本仓库尚未指定开源许可证。在许可证确定前，代码与文档版权归作者所有，
-如需引用或再分发请先联系仓库作者。
+代码、比特流、工具脚本与技术文档以 **MIT License** 发布，详见 [LICENSE](LICENSE)。
+
