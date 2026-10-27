@@ -22,3 +22,19 @@ VERSION text eol=lf
 *.zip  binary
 *.vo   binary
 *.hex  binary
+*.pof  binary
+*.bit  binary
+
+# ---- GitHub Linguist ----
+# .fs 是 Gowin 综合/布线产出的比特流, 不是 F#; .pof/.bit/.vo 是 EDA 产物。
+# 不排除的话 GitHub 会把整个仓库的语言判成 "F#", 语言条完全失真。
+*.fs   -linguist-detectable
+*.pof  -linguist-detectable
+*.bit  -linguist-detectable
+*.vo   -linguist-detectable
+*.hex  -linguist-detectable
+impl/**      linguist-vendored
+*.v    linguist-language=Verilog
+*.vh   linguist-language=Verilog
+*.sv   linguist-language=SystemVerilog
+*.vhd  linguist-language=VHDL
