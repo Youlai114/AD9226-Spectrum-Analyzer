@@ -6,8 +6,9 @@
 //     2. KEY1 按一下 -> span +1 (循环)
 //     3. 编码器顺时针 1 格 -> span +1
 //     4. 编码器逆时针 1 格 -> span -1
-//     5. 编码器按压 -> span 归 0 (Preset)
-//     6. 转到头再转 -> 停在边界不越界
+//     5. 编码器短按 -> span 不变, O_fine 翻转 (精细模式)
+//     6. 编码器长按 -> span 归 0 (Preset)
+//     7. 转到头再转 -> 停在边界不越界
 //
 //   用法: vsim -c -do "run -all; quit -f" tb_key_enc
 // ============================================================================
@@ -28,6 +29,7 @@ module tb_key_enc;
 
     wire [2:0] span;
     wire [4:0] key_press;
+    wire       fine;
 
     key_enc_ctrl #(.SPAN_NUM(5)) u_dut (
         .I_clk       (clk    ),
@@ -40,7 +42,8 @@ module tb_key_enc;
         .I_span_load_val (3'd0),
         .I_enc_mode  (1'b0   ),
         .O_span      (span   ),
-        .O_key_press (key_press)
+        .O_key_press (key_press),
+        .O_fine      (fine   )
     );
 
     integer errs = 0;
@@ -56,6 +59,20 @@ module tb_key_enc;
                 errs = errs + 1;
             end else begin
                 $display("check %0d: pass  span=%0d  (%0s)", ci, span, msg);
+            end
+        end
+    endtask
+
+    task chk_fine;
+        input exp;
+        input [127:0] msg;
+        begin
+            ci = ci + 1;
+            if (fine !== exp) begin
+                $display("check %0d: FAIL  fine=%b exp=%b  (%0s)", ci, fine, exp, msg);
+                errs = errs + 1;
+            end else begin
+                $display("check %0d: pass  fine=%b  (%0s)", ci, fine, msg);
             end
         end
     endtask
@@ -92,12 +109,23 @@ module tb_key_enc;
         end
     endtask
 
+    // 编码器短按 (30ms, 未达长按阈值) -> O_sw_press, O_fine 翻转
     task press_enc_sw;
         begin
             enc_sw = 1'b0;
             repeat (30 * 74250) @(posedge clk);
             enc_sw = 1'b1;
-            repeat (20 * 74250) @(posedge clk);
+            repeat (25 * 74250) @(posedge clk);
+        end
+    endtask
+
+    // 编码器长按 (1s) -> O_sw_long (Preset), 松开后不出短按
+    task press_enc_long;
+        begin
+            enc_sw = 1'b0;
+            repeat (1000 * 74250) @(posedge clk);
+            enc_sw = 1'b1;
+            repeat (25 * 74250) @(posedge clk);
         end
     endtask
 
@@ -116,7 +144,10 @@ module tb_key_enc;
         turn(-1);                chk(3'd3, "ENC CCW 1 detent");
         turn(-1);                chk(3'd2, "ENC CCW 2nd");
 
-        press_enc_sw;            chk(3'd0, "ENC push = Preset");
+        press_enc_sw;            chk(3'd2, "ENC short press, span hold");
+                                 chk_fine(1'b1, "ENC short press -> fine");
+        press_enc_sw;            chk_fine(1'b0, "ENC short press again -> fine off");
+        press_enc_long;          chk(3'd0, "ENC long press = Preset");
         turn(-1);                chk(3'd0, "ENC CCW at min, hold");
 
         press_key(4, 30);        chk(3'd0, "KEY5 = window (span hold)");

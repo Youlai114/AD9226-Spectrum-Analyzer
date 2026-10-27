@@ -12,6 +12,10 @@
 //     结束      : 断言 span == AUTO 期望值
 //   不加 +AUTO: 85ms 落盘帧 4 (频谱) / 150ms 落盘帧 8 (波形), 同旧版
 //
+//   +JUMP: 光标跳峰端到端 (上板实测反馈"跳峰未实现", 仿真锁死行为):
+//     60ms 预热 -> KEY4 开光标 -> 编码器顺时针 3 格 (光标离开峰) ->
+//     短按编码器 -> 断言光标回到基波峰列 (csr_col == hrm_col_p)
+//
 //   用法: vsim -c -do "run -all; quit -f" tb_top +DUMP1=5 +DUMP2=8 +F0=20000 +AUTO
 // ============================================================================
 `timescale 1ns/1ps
@@ -104,14 +108,92 @@ module tb_top;
     reg do_auto;
     reg do_wkey;
     reg do_long;
+    reg do_jump;
     integer exp_span;
+
+    // 编码器短按 (30ms, 未达长按阈值)
+    task press_enc;
+        begin
+            enc_sw = 1'b0;
+            #30_000_000;
+            enc_sw = 1'b1;
+            #25_000_000;
+        end
+    endtask
+
+    // 编码器顺时针一格 (4 状态 x 2ms)
+    task turn_cw;
+        begin
+            {enc_a, enc_b} = 2'b10; #2_000_000;
+            {enc_a, enc_b} = 2'b00; #2_000_000;
+            {enc_a, enc_b} = 2'b01; #2_000_000;
+            {enc_a, enc_b} = 2'b11; #2_000_000;
+            #3_000_000;
+        end
+    endtask
 
     initial begin
         do_auto  = $test$plusargs("AUTO");
         do_wkey  = $test$plusargs("WKEY");
         do_long  = $test$plusargs("LONG");
+        do_jump  = $test$plusargs("JUMP");
 
         #2000 rst = 1'b0;             // 2us 后释放复位 (PLL 已锁)
+
+        if (do_jump) begin
+            // 光标跳峰: 峰列 (100kHz @ 1M) = 102; 先移开再跳回
+            #60_000_000;
+            press_key(3);             // KEY4 -> 光标普通模式
+            #5_000_000;
+            if (u_top.csr_mode !== 2'd1)
+                $display("FAIL: csr_mode=%0d, 期望 1 (KEY4 开光标)", u_top.csr_mode);
+            turn_cw; turn_cw; turn_cw;
+            #2_000_000;
+            if (u_top.csr_col === u_top.hrm_col_p)
+                $display("FAIL: 编码器未移开光标 csr_col=%0d", u_top.csr_col);
+            press_enc;                // 光标模式短按 = 跳到基波峰
+            #2_000_000;
+            if (u_top.csr_col !== u_top.hrm_col_p)
+                $display("FAIL: jump csr_col=%0d, 峰列 %0d",
+                         u_top.csr_col, u_top.hrm_col_p);
+            else
+                $display("pass: jump csr_col=%0d = 峰列 (KEY4 + 短按编码器)",
+                         u_top.csr_col);
+
+            // 光标增量 Δ 模式: KEY4 第二下 -> csr_mode=2, 且显示端必须真的收到 2
+            // (曾经这里接的是 1bit mode_csr, 显示端永远看不到 2, ΔF/ΔdB 不出现)
+            press_key(3);
+            #2_000_000;
+            if (u_top.csr_mode !== 2'd2)
+                $display("FAIL: csr_mode=%0d, 期望 2 (KEY4 增量态)", u_top.csr_mode);
+            else if (u_top.u_display.I_csr_mode !== 2'd2)
+                $display("FAIL: u_display.I_csr_mode=%0d, 期望 2 (Δ 模式没透传到显示)",
+                         u_top.u_display.I_csr_mode);
+            else
+                $display("pass: csr Δ 模式透传 u_display.I_csr_mode=2");
+
+            // Δ 模式读数本身: 参考列已在跳峰时快照 (csr_ref_col=102), 再把光标
+            // 顺时针移 2 格 (普通步进 4 列) -> Δcol=8 -> ΔF = 8 x 1MHz / 1024
+            // 读数经两级流水线后仍在 csr_kick (帧首) 装载, 故等 25ms (>1 帧)
+            turn_cw; turn_cw;
+            #25_000_000;
+            begin : dchk
+                integer dcol, dfexp;
+                dcol  = (u_top.csr_col >= u_top.u_display.csr_ref_col)
+                      ? (u_top.csr_col - u_top.u_display.csr_ref_col)
+                      : (u_top.u_display.csr_ref_col - u_top.csr_col);
+                dfexp = (dcol * 1_000_000) >> 10;
+                if (u_top.u_display.freq_val !== dfexp[19:0])
+                    $display("FAIL: ΔF 读数=%0d, 期望 %0d (Δcol=%0d)",
+                             u_top.u_display.freq_val, dfexp, dcol);
+                else
+                    $display("pass: ΔF=%0d Hz (Δcol=%0d) 读数流水线正确",
+                             u_top.u_display.freq_val, dcol);
+            end
+
+            $display("tb_top done");
+            $finish;
+        end
 
         if (do_long) begin
             // 视频平均收敛验证: 跑 ~45 帧, 帧 4 (初始) 与帧 45 (~94% 收敛) 落盘

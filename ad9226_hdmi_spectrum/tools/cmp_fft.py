@@ -54,6 +54,9 @@ def main():
 
     d = np.abs(rtl.astype(np.int64) - ref)
     print("RTL 与模型: 最大偏差 %d LSB, 平均偏差 %.1f LSB" % (d.max(), d.mean()))
+    # 给回归脚本用的 ASCII 机器可读行: 中文输出是 GBK, 脚本里的 UTF-8 中文
+    # 模式串在 grep 里永远匹配不上 (踩过), 判据只认这一行
+    print("MAXDEV=%d AVGDEV=%.2f" % (d.max(), d.mean()))
     print("RTL  峰值 bin %d = %d" % (int(np.argmax(rtl)), int(rtl.max())))
     print("模型 峰值 bin %d = %d" % (int(np.argmax(ref)), int(ref.max())))
 

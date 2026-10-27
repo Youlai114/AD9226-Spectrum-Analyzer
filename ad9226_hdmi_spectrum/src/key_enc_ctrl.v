@@ -12,13 +12,17 @@
 //                 KEY2=视图切换 KEY3=AUTO KEY4=光标开关 KEY5=Preset
 //     编码器旋转  I_enc_mode=0: 跨度 +1/-1, 到头停住 (不循环)
 //                 I_enc_mode=1: 输出 O_csr_up/dn 移光标, 跨度不动
-//     编码器按压  I_enc_mode=0: Preset (回 Span 1 MHz); KEY5 已让位给窗切换
-//                 I_enc_mode=1: 不动作, O_sw_press 给顶层做"光标跳到峰值"
+//     编码器按压  短按 = 松开时出 O_sw_press:
+//                 I_enc_mode=0: 翻转 O_fine (精细模式, 光标步进 4->1 列)
+//                 I_enc_mode=1: O_sw_press 给顶层做"光标跳到峰值"
+//                 长按 = 按住 >= SW_LONG_MS 出一次 O_sw_long: Preset (回 Span 1 MHz)
+//                 (KEY5 已让位给窗切换)
 // ============================================================================
 module key_enc_ctrl #(
-    parameter SPAN_NUM = 4,
-    parameter ENC_STEP = 4        // 转一格产生几个边沿: 常见 EC11(20 脉冲/20 定位)=4,
+    parameter SPAN_NUM = 5,       // 跨度档数: 1M/250k/50k/10k/27M(宽频)
+    parameter ENC_STEP = 4,       // 转一格产生几个边沿: 常见 EC11(20 脉冲/20 定位)=4,
                                   // 若你的编码器转两格才动一下, 改成 2
+    parameter SW_LONG_MS = 800    // 编码器长按阈值 (ms)
 )(
     input             I_clk,        // 74.25 MHz 像素时钟
     input             I_rst_n,
@@ -28,11 +32,13 @@ module key_enc_ctrl #(
     input             I_enc_b,      // EC11 B 相
     input             I_enc_sw,     // EC11 按压开关, 低有效
     input             I_span_load,      // 单拍: 外部设置跨度 (AUTO 自动跨度)
-    input      [1:0]  I_span_load_val,  // AUTO 给出的目标跨度
+    input      [2:0]  I_span_load_val,  // AUTO 给出的目标跨度 (0..4, 含 27MHz 宽频)
     input             I_enc_mode,       // 1: 编码器移光标 (O_csr_*), 0: 调跨度
     output reg        O_csr_up,         // 单拍: 光标 +步进 (仅 I_enc_mode=1 时)
     output reg        O_csr_dn,         // 单拍: 光标 -步进
-    output reg        O_sw_press,       // 单拍: 编码器按压 (顶层按模式决定用途)
+    output reg        O_sw_press,       // 单拍: 编码器短按 (松开时, 未达长按阈值)
+    output reg        O_sw_long,        // 单拍: 编码器长按 (Preset 用)
+    output reg        O_fine,           // 精细模式状态 (短按翻转, 光标步进 4->1)
 
     output reg [2:0]  O_span,       // 当前跨度 0..SPAN_NUM-1
     output reg [4:0]  O_key_press   // 各键"按下"单拍脉冲 (bit0 = KEY1)
@@ -154,33 +160,55 @@ module key_enc_ctrl #(
     end
 
     //------------------------------------------------------------------
-    // 编码器按压: 15ms 消抖 + Preset
+    // 编码器按压: 15ms 消抖 + 短按/长按区分
+    //   短按 = 按下后 SW_LONG_MS 内松开 -> 松开瞬间出单拍
+    //   长按 = 持续按住 >= SW_LONG_MS   -> 按住期间出一次单拍
     //------------------------------------------------------------------
-    reg [1:0] sw_sync;
-    reg [3:0] sw_cnt;
-    reg       sw_db;
-    reg       sw_press;
+    reg [1:0]  sw_sync;
+    reg [3:0]  sw_cnt;
+    reg        sw_db;
+    reg [10:0] sw_hold;
+    reg        sw_long_done;
+    reg        sw_short, sw_long;
 
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin
-            sw_sync  <= 2'b11;
-            sw_db    <= 1'b1;
-            sw_cnt   <= 4'd0;
-            sw_press <= 1'b0;
+            sw_sync      <= 2'b11;
+            sw_db        <= 1'b1;
+            sw_cnt       <= 4'd0;
+            sw_hold      <= 11'd0;
+            sw_long_done <= 1'b0;
+            sw_short     <= 1'b0;
+            sw_long      <= 1'b0;
         end else begin
             sw_sync  <= {sw_sync[0], I_enc_sw};
-            sw_press <= 1'b0;
+            sw_short <= 1'b0;
+            sw_long  <= 1'b0;
             if (tick1ms) begin
                 if (sw_sync[1] != sw_db) begin
                     if (sw_cnt == 4'd15) begin
                         sw_db  <= sw_sync[1];
                         sw_cnt <= 4'd0;
-                        if (sw_sync[1] == 1'b0) sw_press <= 1'b1;
+                        if (sw_sync[1] == 1'b0) begin        // 按下确认
+                            sw_hold      <= 11'd0;
+                            sw_long_done <= 1'b0;
+                        end else if (!sw_long_done) begin    // 松开且未达长按
+                            sw_short <= 1'b1;
+                        end
                     end else begin
                         sw_cnt <= sw_cnt + 4'd1;
                     end
                 end else begin
                     sw_cnt <= 4'd0;
+                end
+                // 按住计时 (消抖确认按下后仍为低)
+                if ((sw_db == 1'b0) && (sw_sync[1] == 1'b0) && !sw_long_done) begin
+                    if (sw_hold >= SW_LONG_MS) begin
+                        sw_long      <= 1'b1;
+                        sw_long_done <= 1'b1;
+                    end else begin
+                        sw_hold <= sw_hold + 11'd1;
+                    end
                 end
             end
         end
@@ -192,8 +220,8 @@ module key_enc_ctrl #(
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n)
             O_span <= 2'd0;
-        else if (sw_press && !I_enc_mode) begin
-            O_span <= 3'd0;                                  // Preset (编码器按压)
+        else if (sw_long) begin
+            O_span <= 3'd0;                                  // Preset (编码器长按)
         end else if (I_span_load) begin
             O_span <= I_span_load_val;                       // AUTO 加载
         end else if (O_key_press[0]) begin
@@ -206,17 +234,23 @@ module key_enc_ctrl #(
     end
 
     //------------------------------------------------------------------
-    // 光标步进脉冲: 光标模式下编码器旋转走这里 (不调跨度)
+    // 光标步进脉冲 + 短按/长按输出: 光标模式下编码器旋转走这里 (不调跨度)
+    //   短按在跨度档翻 O_fine (精细), 在光标档交给顶层跳峰
     //------------------------------------------------------------------
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin
-            O_csr_up <= 1'b0;
-            O_csr_dn <= 1'b0;
+            O_csr_up   <= 1'b0;
+            O_csr_dn   <= 1'b0;
             O_sw_press <= 1'b0;
+            O_sw_long  <= 1'b0;
+            O_fine     <= 1'b0;
         end else begin
-            O_csr_up <= e_up & I_enc_mode;
-            O_csr_dn <= e_dn & I_enc_mode;
-            O_sw_press <= sw_press;
+            O_csr_up   <= e_up & I_enc_mode;
+            O_csr_dn   <= e_dn & I_enc_mode;
+            O_sw_press <= sw_short;
+            O_sw_long  <= sw_long;
+            if (sw_short && !I_enc_mode)
+                O_fine <= ~O_fine;
         end
     end
 

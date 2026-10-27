@@ -590,20 +590,22 @@ module fft4096 #(
     reg [9:0]  hcol_lat;                          // 上一帧锁定的基波列
     reg        hcol_vld;
 
-    // k*基波列 (10bit 截断): 2x/4x 移位, 3x/5x 移位+加
-    wire [9:0] hc2 = {hcol_lat[8:0], 1'b0};
-    wire [9:0] hc3 = {hcol_lat[8:0], 1'b0} + hcol_lat;
-    wire [9:0] hc4 = {hcol_lat[7:0], 2'b00};
-    wire [9:0] hc5 = {hcol_lat[7:0], 2'b00} + hcol_lat;
+    // k*基波列: 必须按 13bit 全宽算 (5*1023=5115). 旧版用 10bit 移位,
+    // k*col>=1024 时对 1024 回绕 —— 例如基波 600 列时 H2 窗口落回 176 列,
+    // H2..H5 会读到毫不相干的谱线并当成真实谐波电平显示.
+    // k*col>1023 表示该次谐波在显示带宽外, 窗口直接关掉 (峰值保持 0,
+    // 谐波表按无信号显示), 与标记 hv1..hv5 的判定保持一致.
+    wire [12:0] hcol_x = {3'd0, hcol_lat};
+    wire [12:0] hc2 = hcol_x << 1;                  // 2x
+    wire [12:0] hc3 = (hcol_x << 1) + hcol_x;       // 3x
+    wire [12:0] hc4 = hcol_x << 2;                  // 4x
+    wire [12:0] hc5 = (hcol_x << 2) + hcol_x;       // 5x
+    wire [12:0] mag_c = {3'd0, O_mag_addr};
 
-    wire in_w2 = hcol_vld && (O_mag_addr >= hc2 - 10'd2) && (O_mag_addr <= hc2 + 10'd2)
-                          && (hc2 <= 10'd1019);
-    wire in_w3 = hcol_vld && (O_mag_addr >= hc3 - 10'd2) && (O_mag_addr <= hc3 + 10'd2)
-                          && (hc3 <= 10'd1019);
-    wire in_w4 = hcol_vld && (O_mag_addr >= hc4 - 10'd2) && (O_mag_addr <= hc4 + 10'd2)
-                          && (hc4 <= 10'd1019);
-    wire in_w5 = hcol_vld && (O_mag_addr >= hc5 - 10'd2) && (O_mag_addr <= hc5 + 10'd2)
-                          && (hc5 <= 10'd1019);
+    wire in_w2 = hcol_vld && (hc2 <= 13'd1023) && (mag_c >= hc2 - 13'd2) && (mag_c <= hc2 + 13'd2);
+    wire in_w3 = hcol_vld && (hc3 <= 13'd1023) && (mag_c >= hc3 - 13'd2) && (mag_c <= hc3 + 13'd2);
+    wire in_w4 = hcol_vld && (hc4 <= 13'd1023) && (mag_c >= hc4 - 13'd2) && (mag_c <= hc4 + 13'd2);
+    wire in_w5 = hcol_vld && (hc5 <= 13'd1023) && (mag_c >= hc5 - 13'd2) && (mag_c <= hc5 + 13'd2);
 
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin

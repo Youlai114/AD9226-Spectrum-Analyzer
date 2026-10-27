@@ -39,11 +39,14 @@ os.makedirs(OUT_DIR, exist_ok=True)
 missing = []
 with zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED) as z:
     for rel in files:
-        full = os.path.join(ROOT, rel)
+        # files 里混了相对路径与 glob 出来的绝对路径: 一律先解析成绝对路径,
+        # 再用相对 ROOT 的路径当 arcname, 否则 zip 里会出现 D:/code/... 残形
+        full = rel if os.path.isabs(rel) else os.path.join(ROOT, rel)
+        arc = os.path.relpath(full, ROOT).replace(os.sep, '/')
         if not os.path.isfile(full):
-            missing.append(rel)
+            missing.append(arc)
             continue
-        z.write(full, rel)
+        z.write(full, arc)
     z.writestr('RELEASE.txt',
                'AD9226 数字频谱分析仪\n版本: %s\n打包: %s\n'
                '烧录: ad9226_hdmi_spectrum/impl/pnr/*.fs\n'

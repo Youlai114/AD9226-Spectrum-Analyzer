@@ -322,11 +322,10 @@ if __name__ == "__main__":
     with io.open(os.path.join(OUT, "ui_font_rom.v"), "w", encoding="utf-8", newline="\n") as f:
         f.write(gen_font())
     txt = gen_text()
-        # 文字网格已改为 spec_display 内的运行时解码 (put 任务), 不再生成 ui_text_rom.v
+    # 文字网格已改为 spec_display 内的运行时解码 (put 任务), 不再生成 ui_text_rom.v
     # (gen_text() 保留作历史参考, 输出被禁用以省 28 块 BSRAM)
     if os.environ.get("GEN_TEXT_ROM"):
-        with io.open(os.path.join(OUT, "ui_text_rom.v"), "w", encoding="utf-8", newline="
-") as f:
-            f.write("
-".join(text_lines))
+        text_lines = txt.split("\n")
+        with io.open(os.path.join(OUT, "ui_text_rom.v"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(text_lines))
     print("OK, 字模字符数 %d, 字符网格 %d 层 x 3600" % (len(G), NSPAN_G))

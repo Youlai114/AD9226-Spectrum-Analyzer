@@ -30,8 +30,10 @@ module spec_display (
     // ---- 1~5 次谐波标记 (来自 fft4096 的基波峰值检测, 像素时钟域) ----
     input             I_hrm_valid  ,
     input      [9:0]  I_hrm_col    ,   // 基波列, 谐波 k 在 k*I_hrm_col 列
-    input      [1:0]  I_hrm_span   ,   // 测量该列时的跨度档; != I_span 时隐藏标记
+    input      [2:0]  I_hrm_span   ,   // 测量该列时的跨度档; != I_span 时隐藏标记
                                            // (换档后 1~2 帧内旧列不画到新轴上)
+                                           // ★ 必须 3 位: 2 位时宽频档(4)截断成 0,
+                                           //   与 I_span 比较恒假, F0/谐波表全隐藏
     // ---- 光标 (KEY4 三态: 0=关 1=普通 2=增量; 编码器移动; 像素时钟域) ----
     input             I_csr_en     ,
     input      [1:0]  I_csr_mode   ,   // 2=增量: 读 ΔF/ΔdB, 参考线在进入时刻的光标位
@@ -47,6 +49,8 @@ module spec_display (
     input             I_menu_hide  ,   // 1: 右侧菜单折叠成纯黑
     // ---- 窗函数 (KEY5 循环): RBW 显示与菜单 Window 值随窗联动 ----
     input      [1:0]  I_win        ,   // 0=Hann 1=Rect 2=Blackman 3=FlatTop
+    // ---- 编码器精细模式 (短按编码器切换): 光标步进 1 列, 顶栏右上加 FINE ----
+    input             I_fine       ,
     // ---- 数据写入接口 (与像素时钟可异步) ----
     input             I_wr_clk     ,
     input             I_wr_rst_n   ,
@@ -83,7 +87,8 @@ module spec_display (
     localparam [23:0] C_TRACE   = 24'hFF_D8_00;   // RIGOL 黄
     localparam [23:0] C_PEAK    = 24'hFF_6A_3A;
     localparam [23:0] C_TXT0    = 24'hC8_D8_E8;   // 白
-    localparam [23:0] C_TXT1    = 24'h3C_D8_78;   // 绿
+    localparam [23:0] C_TXT1    = 24'h00_E0_50;   // 绿 (F0/谐波表/Span 值;
+                                                  //   旧 3C_D8_78 蓝分量偏高, 屏上偏青蓝)
     localparam [23:0] C_TXT2    = 24'h66_E8_FF;   // 青
     localparam [23:0] C_TXT3    = 24'h8C_B8_E8;   // 蓝
 
@@ -251,7 +256,8 @@ module spec_display (
     //==================================================================
     // 瀑布图: 256 列 x 128 行 x 3bit 色阶, 环形滚动 (新行在顶)
     //   写侧 (I_wr_clk 域): 幅度流 4:1 峰值降采样 -> log 后取 3bit 色阶
-    //   读侧 (像素域):      第 d 行显示 (wrow-1-d) mod 128, d = 年代
+    //   读侧 (像素域):      只占绘图区底部 128 行 (1/4), 上 3/4 黑底网格;
+    //                       显示行 d = yr-384, 历史行 = (wrow-1-d) mod 128
     //   RAM  98kbit = 6 块 BSRAM (twiddle 压缩省出的额度)
     //==================================================================
     reg [2:0] wf_mem [0:32767];         // {行[6:0], 列[7:0]}
@@ -393,11 +399,8 @@ module spec_display (
     endfunction
 
     wire         csr_kick = (I_x == 12'd0) && (I_y == 12'd0);   // 每帧一次
-    wire [34:0]  csr_prod = I_csr_col * span_hz20(I_span);
     // 宽频档 27MHz 超出 6 位 Hz 读数, 改显示 kHz (col x 27000 >> 10, 最大 26999)
-    wire [24:0]  csr_prod_k = I_csr_col * 15'd27000;
-    wire [19:0]  csr_freq   = (I_span == 3'd4) ? {5'd0, csr_prod_k[24:10]}
-                                               : csr_prod[34:10];
+    // 读数计算已改为流水线 (见下方 增量光标 段), csr_freq/dfreq 均取自寄存值
 
 
     // 幅度 -> 0.1dB 单位: db = 6.02 x (log2(mag)-16),
@@ -437,15 +440,42 @@ module spec_display (
 
     wire signed [10:0] dcol_s = $signed({1'b0, I_csr_col})
                                - $signed({1'b0, csr_ref_col});
-    wire        [10:0] dcol_a = dcol_s[10] ? (-dcol_s) : dcol_s;
     wire        [10:0] ddb_s  = csr_dbabs - csr_ref_db;   // 差恒 |..|<=964
-    wire        [10:0] ddb_a  = ddb_s[10] ? (-ddb_s) : ddb_s;
 
-    // 增量频率: |列差| x 跨度 (宽频档同用 kHz 刻度)
-    wire [34:0]  dprod   = dcol_a * span_hz20(I_span);
-    wire [24:0]  dprod_k = dcol_a * 15'd27000;
-    wire [19:0]  dfreq   = (I_span == 3'd4) ? {5'd0, dprod_k[24:10]}
-                                            : dprod[34:10];
+    // ★ 读数流水线: csr_col -> 减法/绝对值 -> 乘法 -> 装载 dd 原本是一条 18.1ns
+    //   的纯组合链 (时序违例 -2.44ns, 77 个端点), 现拆成两级:
+    //     S1 寄存列号/跨度/列差/幅度差  ->  S2 寄存乘法结果  ->  帧首装载 dd
+    //   读数只在 csr_kick (每帧第一个像素) 采样一次, 多两拍无任何可见影响
+    reg  [9:0]  csr_col_s1;
+    reg  [2:0]  span_s1, span_s2;
+    reg  [10:0] dcol_s_s1, ddb_s_s1;
+    reg  [34:0] csr_prod_s2, dprod_s2;
+    reg  [24:0] csr_prod_k_s2, dprod_k_s2;
+
+    wire        [10:0] dcol_a = dcol_s_s1[10] ? (-dcol_s_s1) : dcol_s_s1;
+    wire        [10:0] ddb_a  = ddb_s_s1[10]  ? (-ddb_s_s1)  : ddb_s_s1;
+    wire        [34:0] csr_prod_p   = csr_col_s1 * span_hz20(span_s1);
+    wire        [24:0] csr_prod_k_p = csr_col_s1 * 15'd27000;
+    wire        [34:0] dprod_p      = dcol_a * span_hz20(span_s1);
+    wire        [24:0] dprod_k_p    = dcol_a * 15'd27000;
+
+    always @(posedge I_pix_clk) begin
+        csr_col_s1 <= I_csr_col;
+        span_s1    <= I_span;
+        dcol_s_s1  <= dcol_s;
+        ddb_s_s1   <= ddb_s;
+        // 第二级: 乘法 (宽频档同用 kHz 刻度)
+        span_s2       <= span_s1;
+        csr_prod_s2   <= csr_prod_p;
+        csr_prod_k_s2 <= csr_prod_k_p;
+        dprod_s2      <= dprod_p;
+        dprod_k_s2    <= dprod_k_p;
+    end
+
+    wire [19:0] csr_freq = (span_s2 == 3'd4) ? {5'd0, csr_prod_k_s2[24:10]}
+                                             : csr_prod_s2[34:10];
+    wire [19:0] dfreq    = (span_s2 == 3'd4) ? {5'd0, dprod_k_s2[24:10]}
+                                             : dprod_s2[34:10];
 
     always @(posedge I_pix_clk or negedge I_pix_rst_n) begin
         if (!I_pix_rst_n) begin
@@ -460,8 +490,8 @@ module spec_display (
                     freq_val <= dfreq;
                     db_abs   <= {1'b0, ddb_a};
                     dd       <= {32'd0, dfreq};
-                    dfr_sign <= dcol_s[10];
-                    ddb_sign <= ddb_s[10];
+                    dfr_sign <= dcol_s_s1[10];
+                    ddb_sign <= ddb_s_s1[10];
                 end else begin
                     freq_val <= csr_freq;
                     db_abs   <= csr_dbabs;
@@ -580,67 +610,74 @@ module spec_display (
     reg [3:0]   rbw_len;
     // ★ 寄存一拍切断 O_span->RBW 选择->行解码 的长组合链 (值仅按键时变,
     //   延迟一帧不可见; 否则该链是全设计最差路径)
-    reg [287:0] rbw_s_r, rbw_s40_r;
+    reg [287:0] rbw_s_r;
     reg [3:0]   rbw_len_r;
     always @(posedge I_pix_clk) begin
         rbw_s_r   <= rbw_s;
-        rbw_s40_r <= rbw_s << 40;
         rbw_len_r <= rbw_len;
     end
 
     // 窗名: 菜单值 + 底栏 Win:
     reg [287:0] win_name;      // 菜单 4~5 字符
     reg [3:0]   win_len;
-    reg [287:0] win_long;      // 底栏 "Hann" 等
-    reg [287:0] win_name_r, win_long40_r;
+    reg [287:0] win_long;      // 底栏 "Hann " 等 (统一 5 字符, 底栏 len 固定 10)
+    reg [287:0] win_name_r, win_long_r;
     reg [3:0]   win_len_r;
     always @(posedge I_pix_clk) begin
-        win_name_r   <= win_name;
-        win_long40_r <= win_long << 40;
-        win_len_r    <= win_len;
+        win_name_r <= win_name;
+        win_long_r <= win_long;
+        win_len_r  <= win_len;
     end
 
+    // ★ case 值 = {I_win, I_span} 即 win*8+span (span 是低 3 位), 每窗占 8 个
+    //   值域; 此前误写成每窗 5 个连排, Rect@1M 落到 "7.3 Hz" 行 (上板实测抓到)
     always @(I_win or I_span) begin
         case ({I_win, I_span})
-        5'd00: begin rbw_s = "488 Hz";    rbw_len = 4'd6;  end  // Rect  @1M
-        5'd01: begin rbw_s = "122 Hz";    rbw_len = 4'd6;  end
-        5'd02: begin rbw_s = "24.4 Hz";   rbw_len = 4'd7;  end
-        5'd03: begin rbw_s = "4.9 Hz";    rbw_len = 4'd6;  end
-        5'd04: begin rbw_s = "13.18 kHz"; rbw_len = 4'd9;  end
-        5'd05: begin rbw_s = "732 Hz";    rbw_len = 4'd6;  end  // Hann @1M
-        5'd06: begin rbw_s = "183 Hz";    rbw_len = 4'd6;  end
-        5'd07: begin rbw_s = "36.6 Hz";   rbw_len = 4'd7;  end
-        5'd08: begin rbw_s = "7.3 Hz";    rbw_len = 4'd6;  end
-        5'd09: begin rbw_s = "19.78 kHz"; rbw_len = 4'd9;  end
-        5'd10: begin rbw_s = "843 Hz";    rbw_len = 4'd6;  end  // Black @1M
-        5'd11: begin rbw_s = "211 Hz";    rbw_len = 4'd6;  end
-        5'd12: begin rbw_s = "42.2 Hz";   rbw_len = 4'd7;  end
-        5'd13: begin rbw_s = "8.4 Hz";    rbw_len = 4'd6;  end
-        5'd14: begin rbw_s = "22.77 kHz"; rbw_len = 4'd9;  end
-        5'd15: begin rbw_s = "1.84 kHz";  rbw_len = 4'd8;  end  // Flat @1M
-        5'd16: begin rbw_s = "460 Hz";    rbw_len = 4'd6;  end
-        5'd17: begin rbw_s = "92.0 Hz";   rbw_len = 4'd7;  end
-        5'd18: begin rbw_s = "18.4 Hz";   rbw_len = 4'd7;  end
-        default: begin rbw_s = "49.70 kHz"; rbw_len = 4'd9; end  // Flat @27M
+        // Hann: ENBW 1.5 x fs/4096
+        5'd00: begin rbw_s = "732 Hz";    rbw_len = 4'd6;  end  // Hann  @1M
+        5'd01: begin rbw_s = "183 Hz";    rbw_len = 4'd6;  end
+        5'd02: begin rbw_s = "36.6 Hz";   rbw_len = 4'd7;  end
+        5'd03: begin rbw_s = "7.3 Hz";    rbw_len = 4'd6;  end
+        5'd04: begin rbw_s = "19.78 kHz"; rbw_len = 4'd9;  end
+        // Rect: ENBW 1.0
+        5'd08: begin rbw_s = "488 Hz";    rbw_len = 4'd6;  end  // Rect  @1M
+        5'd09: begin rbw_s = "122 Hz";    rbw_len = 4'd6;  end
+        5'd10: begin rbw_s = "24.4 Hz";   rbw_len = 4'd7;  end
+        5'd11: begin rbw_s = "4.9 Hz";    rbw_len = 4'd6;  end
+        5'd12: begin rbw_s = "13.18 kHz"; rbw_len = 4'd9;  end
+        // Blackman: ENBW 1.73
+        5'd16: begin rbw_s = "843 Hz";    rbw_len = 4'd6;  end  // Black @1M
+        5'd17: begin rbw_s = "211 Hz";    rbw_len = 4'd6;  end
+        5'd18: begin rbw_s = "42.2 Hz";   rbw_len = 4'd7;  end
+        5'd19: begin rbw_s = "8.4 Hz";    rbw_len = 4'd6;  end
+        5'd20: begin rbw_s = "22.77 kHz"; rbw_len = 4'd9;  end
+        // FlatTop: ENBW 3.77
+        5'd24: begin rbw_s = "1.84 kHz";  rbw_len = 4'd8;  end  // Flat  @1M
+        5'd25: begin rbw_s = "460 Hz";    rbw_len = 4'd6;  end
+        5'd26: begin rbw_s = "92.0 Hz";   rbw_len = 4'd7;  end
+        5'd27: begin rbw_s = "18.4 Hz";   rbw_len = 4'd7;  end
+        5'd28: begin rbw_s = "49.70 kHz"; rbw_len = 4'd9;  end
+        default: begin rbw_s = "732 Hz";  rbw_len = 4'd6;  end
         endcase
     end
 
     always @(I_win) begin
         case (I_win)
-        2'd0: begin win_name = "HANN";  win_len = 4'd4;  win_long = "Hann";  end
-        2'd1: begin win_name = "RECT";  win_len = 4'd4;  win_long = "Rect";  end
+        2'd0: begin win_name = "HANN";  win_len = 4'd4;  win_long = "Hann "; end
+        2'd1: begin win_name = "RECT";  win_len = 4'd4;  win_long = "Rect "; end
         2'd2: begin win_name = "BLACK"; win_len = 4'd5;  win_long = "Black"; end
-        default: begin win_name = "FLAT"; win_len = 4'd4; win_long = "Flat"; end
+        default: begin win_name = "FLAT"; win_len = 4'd4; win_long = "Flat "; end
         endcase
     end
 
     // ★ 按 cell_row 分组 (case 并行), 行内最多 5 个 put —— 否则 40 个顺序 put
     //   构成 12 级优先链, 是全设计最差路径 (put 参数 = (列, 行) 与 gen_font 一致)
-    always @(cell_row or cell_col or I_span or rbw_s_r or rbw_s40_r or rbw_len_r
-             or win_name_r or win_len_r or win_long40_r) begin
+    always @(cell_row or cell_col or I_span or I_fine or rbw_s_r or rbw_len_r
+             or win_name_r or win_len_r or win_long_r) begin
         t_ch = 8'd0;
         t_co = 2'd0;
         case (cell_row)
+        6'd0: if (I_fine) put(76, 0, 4, "FINE", 2'd2);
         6'd1: begin
             put( 1, 1,  8, "SPECTRUM", 2'd2);
             put(11, 1, 12, "Center Freq:", 2'd0);
@@ -762,7 +799,10 @@ module spec_display (
             endcase
         end
         6'd42: begin
-            put( 1, 42, 9, {"Win: ", win_long40_r[247:0]}, 2'd0);
+            // 底栏三处都是 "标签 + 值": put 从高字节往低字节读, 所以标签必须
+            // 拼在值的**高位**且整体右对齐到 bit0, 不能靠 <<40 去挪 (旧写法
+            // 把标签顶到 288bit 之外, 屏幕上只剩 "Hann" 丢了 "Win: ")
+            put( 1, 42, 10, {"Win: ", win_long_r[39:0]}, 2'd0);
             put(12, 42, 10, "NFFT: 4096", 2'd0);
             case (I_span)
             3'd0:    put(23, 42, 15, "Span: 1.000 MHz", 2'd0);
@@ -771,7 +811,8 @@ module spec_display (
             3'd3:    put(23, 42, 16, "Span: 10.000 kHz", 2'd0);
             default: put(23, 42, 16, "Span: 27.000 MHz", 2'd0);
             endcase
-            put(43, 42, {1'b0, rbw_len_r} + 4'd5, {"RBW: ", rbw_s40_r[247:0]}, 2'd0);
+            put(43, 42, 5, "RBW: ", 2'd0);
+            put(48, 42, {1'b0, rbw_len_r}, rbw_s_r, 2'd0);
         end
         6'd43: put(74, 43, 3, "1/2", 2'd3);
         default: ;
@@ -1060,12 +1101,14 @@ module spec_display (
 
     //------------------------------------------------------------------
     // 瀑布图读侧: 第 3 级发地址, 第 4 级取数, 第 5 级寄存色阶
-    //   显示行 d = yr3[8:2] (0=最新), 历史行 = (wrow-1-d) mod 128
+    //   只显示绘图区底部 128 行: yr3 in [384,511] (yr3[9:7]=3'b011),
+    //   d = yr3[6:0] (0=最新), 历史行 = (wrow-1-d) mod 128
     //------------------------------------------------------------------
-    wire [6:0]  wf_d     = yr3[8:2];
+    wire        wf_in3   = (yr3[9:7] == 3'b011);
+    wire [6:0]  wf_d     = yr3[6:0];
     wire [6:0]  wf_hist  = wf_rrow_s1 - 7'd1 - wf_d;      // 7bit 模 128
     wire [14:0] wf_raddr = {wf_hist, xr3[9:2]};
-    wire        wf_row_ok = wf_full_s1 || (wf_d < wf_rrow_s1);
+    wire        wf_row_ok = wf_in3 && (wf_full_s1 || (wf_d < wf_rrow_s1));
 
     always @(posedge I_pix_clk) begin
         wf_rdata <= wf_mem[wf_raddr];
@@ -1149,7 +1192,9 @@ module spec_display (
                   ((row4 >= 17) && (row4 <= 20)) || ((row4 >= 22) && (row4 <= 25)) ||
                   ((row4 >= 27) && (row4 <= 30)) || ((row4 >= 32) && (row4 <= 35)) ||
                   ((row4 >= 37) && (row4 <= 40));
-    wire btn_hi = (row4 >= 18) && (row4 <= 21);         // Window 按钮高亮 (=KEY5 可调)
+    // Window 按钮在 17..20 行 (in_btn 第 3 组), 高亮必须与按钮同区间;
+    // 旧值 18..21 会让高亮压到 21 行 (按钮间空隙) 而漏掉首行
+    wire btn_hi = (row4 >= 17) && (row4 <= 20);         // Window 按钮高亮 (=KEY5 可调)
 
     wire is_sep = ((y4 >= 12'd96)  && (y4 <= 12'd99))  ||
                   ((y4 >= 12'd618) && (y4 <= 12'd621)) ||

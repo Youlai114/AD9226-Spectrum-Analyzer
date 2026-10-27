@@ -1,0 +1,24 @@
+# 仓库里 core.autocrlf=true(Windows), 若不钉死 EOL, 重新 checkout 会把
+# run_regression.sh 变成 CRLF 导致 Git Bash 报 "$'\r': command not found"
+*.sh    text eol=lf
+*.py    text eol=lf
+*.v     text eol=lf
+*.sv    text eol=lf
+*.vh    text eol=lf
+*.md    text eol=lf
+*.cst   text eol=lf
+*.sdc   text eol=lf
+*.tcl   text eol=lf
+*.ipc   text eol=lf
+*.txt   text eol=lf
+VERSION text eol=lf
+
+# 二进制: 不做行尾转换
+*.docx binary
+*.doc  binary
+*.fs   binary
+*.png  binary
+*.ppm  binary
+*.zip  binary
+*.vo   binary
+*.hex  binary

@@ -45,8 +45,14 @@ module auto_span (
 
     reg [2:0] tgt;
 
+    // 峰贴在 DC 列 (col 0): 要么是直流偏置, 要么是信号超出当前档 Nyquist
+    // 被折叠 (如 20 kHz 信号在 10 kHz 档) —— 窄档里无法区分, 统一放大一档,
+    // 再按一次 AUTO 可逐级找到信号所在档
+    wire alias_dc = I_hrm_valid && (I_hrm_col < 10'd4) && (I_span_cur != 3'd4);
+
     always @(*) begin
-        if (!I_hrm_valid)                tgt = 3'd0;
+        if (alias_dc)                    tgt = I_span_cur + 3'd1;
+        else if (!I_hrm_valid)           tgt = 3'd0;
         else if (prod <= 35'd1884160)    tgt = 3'd3;   // 5*f0 <= 9.2 kHz
         else if (prod <= 35'd9420800)    tgt = 3'd2;   // 5*f0 <= 46 kHz
         else if (prod <= 35'd47104000)   tgt = 3'd1;   // 5*f0 <= 230 kHz

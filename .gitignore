@@ -7,19 +7,26 @@ __pycache__/
 .workbuddy-ai/
 
 # ---- ModelSim (work 库/日志/输出可全部再生) ----
-sim/work/
-sim/transcript
-sim/*.log
-sim/out/
-sim/frames/*.ppm
+# 注意: 全部在 ad9226_hdmi_spectrum/sim/ 下, 少写一级前缀会失效
+ad9226_hdmi_spectrum/sim/work/
+ad9226_hdmi_spectrum/sim/cleanwork/
+ad9226_hdmi_spectrum/sim/transcript
+ad9226_hdmi_spectrum/sim/*.log
+ad9226_hdmi_spectrum/sim/out/
+ad9226_hdmi_spectrum/sim/frames/*.ppm
+ad9226_hdmi_spectrum/sim/modelsim.ini
 
-# ---- Gowin 中间产物 (保留 .fs 比特流与 rpt.txt 时序摘要) ----
+# ---- Gowin 中间产物 (保留 .fs 比特流 / rpt.txt / timing_paths) ----
 ad9226_hdmi_spectrum/impl/gwsynthesis/
 ad9226_hdmi_spectrum/impl/temp/
 ad9226_hdmi_spectrum/impl/pnr/*
 !ad9226_hdmi_spectrum/impl/pnr/ad9226_hdmi_spectrum.fs
 !ad9226_hdmi_spectrum/impl/pnr/*.rpt.txt
+!ad9226_hdmi_spectrum/impl/pnr/*.timing_paths
 ad9226_hdmi_spectrum/build.log
+ad9226_hdmi_spectrum/src/dvi_tx/temp/
+ad9226_hdmi_spectrum/src/dvi_tx/*.vo
+ad9226_hdmi_spectrum/src/dvi_tx/*_tmp.v
 
 # ---- 历史工程的 EDA 中间产物 ----
 AD9226_FPGA_V1.1_65M/prj/db/

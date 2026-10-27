@@ -12,27 +12,27 @@
   <Part Number>: GW2AR-LV18QN88C8/I7
   <Device>: GW2AR-18
   <Device Version>: C
-  <Created Time>:Sun Oct 25 14:45:23 2026
+  <Created Time>:Tue Oct 27 21:01:03 2026
 
 
 2. PnR Details
 
   Running placement:
-    Placement Phase 0: CPU time = 0h 0m 1s, Elapsed time = 0h 0m 1s
-    Placement Phase 1: CPU time = 0h 0m 0.328s, Elapsed time = 0h 0m 0.328s
-    Placement Phase 2: CPU time = 0h 0m 2s, Elapsed time = 0h 0m 2s
-    Placement Phase 3: CPU time = 0h 0m 3s, Elapsed time = 0h 0m 3s
-    Total Placement: CPU time = 0h 0m 7s, Elapsed time = 0h 0m 7s
+    Placement Phase 0: CPU time = 0h 0m 2s, Elapsed time = 0h 0m 2s
+    Placement Phase 1: CPU time = 0h 0m 0.373s, Elapsed time = 0h 0m 0.372s
+    Placement Phase 2: CPU time = 0h 0m 3s, Elapsed time = 0h 0m 3s
+    Placement Phase 3: CPU time = 0h 0m 11s, Elapsed time = 0h 0m 11s
+    Total Placement: CPU time = 0h 0m 17s, Elapsed time = 0h 0m 17s
  Running routing:
     Routing Phase 0: CPU time = 0h 0m 0.004s, Elapsed time = 0h 0m 0.004s
-    Routing Phase 1: CPU time = 0h 0m 0.402s, Elapsed time = 0h 0m 0.402s
-    Routing Phase 2: CPU time = 0h 0m 6s, Elapsed time = 0h 0m 6s
+    Routing Phase 1: CPU time = 0h 0m 0.393s, Elapsed time = 0h 0m 0.393s
+    Routing Phase 2: CPU time = 0h 0m 23s, Elapsed time = 0h 0m 23s
     Routing Phase 3: CPU time = 0h 0m 0s, Elapsed time = 0h 0m 0s
-    Total Routing: CPU time = 0h 0m 7s, Elapsed time = 0h 0m 7s
+    Total Routing: CPU time = 0h 0m 24s, Elapsed time = 0h 0m 24s
  Generate output files:
     CPU time = 0h 0m 2s, Elapsed time = 0h 0m 2s
 
- Total Time and Memory Usage: CPU time = 0h 0m 16s, Elapsed time = 0h 0m 16s, Peak memory usage = 446MB
+ Total Time and Memory Usage: CPU time = 0h 0m 42s, Elapsed time = 0h 0m 42s, Peak memory usage = 428MB
 
 
 3. Resource Usage Summary
@@ -40,15 +40,15 @@
   --------------------------------------------------------------------------------
   Resources                   | Usage                               | Utilization
   --------------------------------------------------------------------------------
-  Logic                       | 5678/20736                          |  28%
-    --LUT,ALU,ROM16           | 5648(4634 LUT, 1014 ALU, 0 ROM16)   | -
+  Logic                       | 5807/20736                          |  28%
+    --LUT,ALU,ROM16           | 5777(4740 LUT, 1037 ALU, 0 ROM16)   | -
     --SSRAM(RAM16)            | 5                                   | -
-  Register                    | 2097/15750                          |  14%
+  Register                    | 2164/15750                          |  14%
     --Logic Register as Latch | 0/15552                             |  0%
-    --Logic Register as FF    | 2076/15552                          |  14%
+    --Logic Register as FF    | 2143/15552                          |  14%
     --I/O Register as Latch   | 0/198                               |  0%
     --I/O Register as FF      | 21/198                              |  11%
-  CLS                         | 3755/10368                          |  37%
+  CLS                         | 3748/10368                          |  37%
   I/O Port                    | 34/66                               |  52%
   I/O Buf                     | 30                                  | -
     --Input Buf               | 23                                  | -
@@ -59,9 +59,9 @@
   BSRAM                       | 32/46                               | 70%
     --SDPB                    | 21
     --pROM                    | 11
-  DSP                         | 12/24                               | 50%
-    --MULT18X18               | 14
-    --MULTALU36X18            | 4
+  DSP                         | 13.5/24                             | 57%
+    --MULT18X18               | 15
+    --MULTALU36X18            | 5
     --MULTADDALU18X18         | 1
   ================================================================================
 
@@ -104,8 +104,8 @@
   I_clk_d        | PRIMARY        |  BR BL
   pix_clk        | PRIMARY        |  TR TL BR BL
   O_clk_adc_d    | PRIMARY        |  TR TL BR BL
-  n434_3         | LW             |  -
-  n225_6         | LW             |  -
+  n436_3         | LW             |  -
+  n227_6         | LW             |  -
   cap_start      | LW             |  -
   n36_6          | LW             |  -
   win[0]         | LW             |  -

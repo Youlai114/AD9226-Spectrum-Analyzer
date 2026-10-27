@@ -12,7 +12,9 @@
 //
 //   人机界面 (打板版本):
 //     5 个按键 + EC11 旋转编码器 (A/B/SW), 均由 key_enc_ctrl 处理
-//     编码器旋转 = 切跨度 (到头停), 按压 = Preset, KEY1 = 循环切跨度
+//     编码器旋转 = 切跨度 (到头停) / 光标模式下移光标 (短按切精细后步进 1 列)
+//     编码器短按 = 跨度档: 切精细 (FINE, 光标步进 4->1); 光标档: 跳到峰
+//     编码器长按 = Preset, KEY1 = 循环切跨度
 //     KEY2 = 显示模式循环 (频谱+瀑布/纯净频谱/时域波形);
 //     KEY3 = AUTO 自动跨度; KEY4 = 光标三态 (关/普通/增量 Δ);
 //     KEY5 = 窗函数循环 (Hann/Rect/Blackman/FlatTop, 默认 Hann)
@@ -198,15 +200,20 @@ module video_top
     wire csr_en  = (csr_mode != 2'd0);
     wire mode_csr = csr_en & ~mode_wave;
 
-    wire csr_up, csr_dn, sw_press;
+    wire csr_up, csr_dn, sw_press, sw_long, fine;
 
     reg  [9:0] csr_col;                    // 光标列 0..1023 (更新逻辑在 CDC 块之后)
 
     // AUTO (KEY3): 自动跨度, 结果写回 key_enc_ctrl 保持单一跨度源
-    wire [1:0] span_auto;
+    //   3 bit: 跨度档 0..4, 第 4 档是 27MHz 宽频(直采 54MSPS) —— auto_span 在
+    //   f0 > 500kHz 时就会给 4, 位宽少一位会把它截成 0(1MHz 档), AUTO 也就
+    //   "看到宽频信号却跳回 1MHz"
+    wire [2:0] span_auto;
     wire       span_load;
 
-    key_enc_ctrl #(.SPAN_NUM(4)) u_key (
+    // SPAN_NUM=5 覆盖 1M/250k/50k/10k/27M 五档 (ad9226_capture 的 I_dec_sel
+    // 也按 0..4 实现了五档, 见 ad9226_capture.v:39 注释)
+    key_enc_ctrl #(.SPAN_NUM(5)) u_key (
         .I_clk           (pix_clk    ),
         .I_rst_n         (hdmi4_rst_n),
         .I_key           (I_key      ),
@@ -219,6 +226,8 @@ module video_top
         .O_csr_up        (csr_up     ),
         .O_csr_dn        (csr_dn     ),
         .O_sw_press      (sw_press   ),
+        .O_sw_long       (sw_long    ),
+        .O_fine          (fine       ),
         .O_span          (span       ),
         .O_key_press     (key_press  )
     );
@@ -403,13 +412,15 @@ module video_top
         .O_load      (span_load  )
     );
 
-    // 光标列更新: 旋转步进; 光标模式下按压 = 跳到基波峰值列
+    // 光标列更新: 旋转步进 (精细档 1 列, 普通 4 列);
+    // 光标模式下短按压 = 跳到基波峰值列
+    wire [9:0] csr_step = fine ? 10'd1 : 10'd4;
     always @(posedge pix_clk or negedge hdmi4_rst_n) begin
-        if (!hdmi4_rst_n)                       csr_col <= 10'd512;
-        else if (mode_csr && sw_press && hrm_valid_p)
-                                                csr_col <= hrm_col_p;
-        else if (csr_up && csr_col <= 10'd1019) csr_col <= csr_col + 10'd4;
-        else if (csr_dn && csr_col >= 10'd4)    csr_col <= csr_col - 10'd4;
+        if (!hdmi4_rst_n)                                  csr_col <= 10'd512;
+        else if (mode_csr && sw_press && hrm_valid_p)      csr_col <= hrm_col_p;
+        else if (csr_up && (csr_col <= 10'd1023 - csr_step))
+                                                           csr_col <= csr_col + csr_step;
+        else if (csr_dn && (csr_col >= csr_step))          csr_col <= csr_col - csr_step;
     end
 
     // LED (低电平点亮): LED_STAT 心跳, LED_OVR 过载常亮
@@ -433,7 +444,9 @@ module video_top
     spec_tone_gen u_tone (
         .I_clk         (pix_clk    ),
         .I_rst_n       (hdmi4_rst_n),
-        .I_span        (span       ),
+        // 演示源只在 USE_ADC=0 时有效, 综合时被整块优化掉; tone_rom 只有
+        // 4 层(4096x16), 所以这里显式取低 2 bit —— 宽频档(4)落到第 0 层
+        .I_span        (span[1:0]  ),
         .I_frame_tick  (frame_tick ),
         .O_frame_start (tone_fs    ),
         .O_wr_en       (tone_en    ),
@@ -474,7 +487,11 @@ module video_top
         .I_hrm_col     (hrm_col_p       ),
         .I_hrm_span    (hrm_span_p      ),
         .I_csr_en      (csr_en & ~mode_wave),
-        .I_csr_mode    (mode_csr        ),
+        // 必须是完整的 2bit csr_mode (1=普通 2=增量Δ): spec_display 内部按 2'd1/
+        // 2'd2 判模式并锁存 Δ 参考线, 早先这里接的是 1bit 的 mode_csr, 于是显示端
+        // 永远看不到 2, 增量 ΔF/ΔdB 模式形同不存在。波形视图由 I_csr_en 关掉即可,
+        // 这里不再多加一级 mux (像素域时序已贴极限)
+        .I_csr_mode    (csr_mode        ),
         .I_h2          (h2_p            ),
         .I_h3          (h3_p            ),
         .I_h4          (h4_p            ),
@@ -483,6 +500,7 @@ module video_top
         .I_wf_en       (spec_wf_en      ),
         .I_menu_hide   (spec_hide       ),
         .I_win         (win             ),
+        .I_fine        (fine            ),
         .I_wr_clk      (spec_wr_clk     ),
         .I_wr_rst_n    (spec_wr_rst_n   ),
         .I_frame_start (spec_frame_start),

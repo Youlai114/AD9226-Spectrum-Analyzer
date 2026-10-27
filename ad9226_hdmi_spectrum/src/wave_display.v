@@ -60,7 +60,7 @@ module wave_display (
     localparam [23:0] C_ZERO   = 24'h1E_5E_46;   // 0V 基准线 (暗绿)
     localparam [23:0] C_TRACE  = 24'h00_E8_64;   // 迹线亮绿
     localparam [23:0] C_TXT0   = 24'hC8_D8_E8;
-    localparam [23:0] C_TXT1   = 24'h3C_D8_78;
+    localparam [23:0] C_TXT1   = 24'h00_E0_50;   // 与 spec_display 一致 (纯绿)
     localparam [23:0] C_TXT2   = 24'h66_E8_FF;
 
     //==================================================================
@@ -202,6 +202,22 @@ module wave_display (
         endcase
 
         put(41, 2, 35, "Trig: Rise 0V    KEY2: Spectrum View", 2'd0);
+
+        // 右侧菜单面板 (此前时域挡菜单区一片空白, 上板实测反馈补上)
+        // 注意本文件 put 参数为 (行, 列), 与 spec_display 的 (列, 行) 相反
+        put( 6, 70, 4, "WAVE", 2'd2);
+        put( 7, 70, 4, "Span", 2'd2);
+        case (I_span)
+        2'd0: put( 8, 70, 6, "1 MHz",  2'd1);
+        2'd1: put( 8, 70, 7, "250 kHz", 2'd1);
+        2'd2: put( 8, 70, 6, "50 kHz", 2'd1);
+        2'd3: put( 8, 70, 6, "10 kHz", 2'd1);
+        3'd4: put( 8, 70, 6, "27 MHz", 2'd1);
+        endcase
+        put(10, 70, 4, "Trig", 2'd2);
+        put(11, 70, 8, "Rise 0V", 2'd1);
+        put(13, 70, 4, "NPTS", 2'd2);
+        put(14, 70, 4, "1024", 2'd1);
     end
 
     //==================================================================
