@@ -8,6 +8,10 @@ __pycache__/
 
 # ---- ModelSim (work 库/日志/输出可全部再生) ----
 # 注意: 全部在 ad9226_hdmi_spectrum/sim/ 下, 少写一级前缀会失效
+# transcript 会落在"当前工作目录", 曾经从仓库根和工程根各漏进 git 一份
+/transcript
+/ad9226_hdmi_spectrum/transcript
+transcript
 ad9226_hdmi_spectrum/sim/work/
 ad9226_hdmi_spectrum/sim/cleanwork/
 ad9226_hdmi_spectrum/sim/transcript
