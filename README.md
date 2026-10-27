@@ -1,7 +1,7 @@
 # AD9226 + HDMI 数字频谱分析仪（Tang Nano 20K / GW2AR-18）
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
+[![Release](https://img.shields.io/badge/release-v1.1.1-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
 [![Language](https://img.shields.io/badge/HDL-Verilog-orange.svg)](#)
 
 用一片 **高云 Tang Nano 20K**（GW2AR-18C）直采 **AD9226 12bit / 54 MSPS** ADC，
@@ -117,6 +117,8 @@ AD9226 的 14 根线全部走两侧 2×10 排针，避开所有复用脚（SPI F
 
 ## 5. 版本与发布
 
+- [v1.1.1](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases/tag/v1.1.1) —
+  仓库清理版：全部历史提交去除非公开材料引用，三个版本发布包重打（RTL 与比特流同 v1.1.0）
 - [v1.1.0](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases/tag/v1.1.0) —
   上板反馈修复 + 逐文件代码通读复查修掉 12 处静默缺陷，比特流重出（TNS 全 0）
 - [v1.0.0](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases/tag/v1.0.0) — 首个基线版本
