@@ -24,6 +24,7 @@ files = [
     '文档/代码阅读引导.docx',
     '文档/程序对照注释手册.docx',
     '文档/交接文档.docx',
+    '文档/上板测试记录表.docx',
     'CHANGELOG.md',
     'VERSION',
 ]
