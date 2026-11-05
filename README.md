@@ -1,7 +1,7 @@
 # AD9226 + HDMI 数字频谱分析仪（Tang Nano 20K / GW2AR-18）
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.2.1-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
+[![Release](https://img.shields.io/badge/release-v1.2.2-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
 [![Language](https://img.shields.io/badge/HDL-Verilog-orange.svg)](#)
 
 用一片 **高云 Tang Nano 20K**（GW2AR-18C）直采 **AD9226 12bit / 54 MSPS** ADC，
@@ -40,7 +40,7 @@ droop 边界，且时钟抖动直接变成采样误差。让 ADC 恒跑 54 MSPS�
 **为什么抽取比是 27 而不是 32**：54 / 27 = 2.000 MHz，跨度正好 1.000 MHz；取 32 则
 跨度 843.75 kHz，屏幕上刻度全是小数。
 
-### 1.1 时域谐波分解（v1.2.0 新增，v1.2.1 修文字与时基）
+### 1.1 时域谐波分解（v1.2.0 新增，v1.2.1 修文字与时基，v1.2.2 放宽基波门限）
 
 KEY2 切到时域视图后，屏幕除了灰色原始采样波形，还会同时画出 **1~5 次谐波各自的分量
 正弦**（绿/青/品红/橙/紫，与频谱视图的谐波标记同色）：
@@ -135,6 +135,8 @@ AD9226 的 14 根线全部走两侧 2×10 排针，避开所有复用脚（SPI F
 
 ## 5. 版本与发布
 
+- [v1.2.2](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases/tag/v1.2.2) —
+  基波检测门限 -12 → -18 dBFS、峰搜索下界 8 → 5 列（方波/小信号也能出谐波），时序仍收敛
 - [v1.2.1](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases/tag/v1.2.1) —
   时域视图上板反馈修复：27 处文字长度错位、字符发虚、左边缘竖线；时基改为
   1024/512/256/128 点（原来越缩越窄，低频看不到一个周期）；幅度档扩到 6 档

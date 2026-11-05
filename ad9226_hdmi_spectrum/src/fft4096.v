@@ -621,7 +621,7 @@ module fft4096 #(
             pk_max <= 16'd0;
             h2_max <= 16'd0;  h3_max <= 16'd0;  h4_max <= 16'd0;  h5_max <= 16'd0;
         end else if (O_mag_en) begin
-            if ((O_mag_addr >= 10'd8) && (O_mag_addr <= 10'd1015) &&
+            if ((O_mag_addr >= 10'd5) && (O_mag_addr <= 10'd1015) &&
                 (O_mag > pk_max)) begin
                 pk_max <= O_mag;
                 O_hrm_col <= O_mag_addr;
@@ -631,12 +631,12 @@ module fft4096 #(
             if (in_w4 && (O_mag > h4_max)) h4_max <= O_mag;
             if (in_w5 && (O_mag > h5_max)) h5_max <= O_mag;
             if (O_mag_addr == 10'd1023) begin
-                O_hrm_valid <= (pk_max >= 16'd16384);   // -12 dBFS 门限
+                O_hrm_valid <= (pk_max >= 16'd8192);    // -18 dBFS 门限 (方波/小信号也能认基波)
                 O_hrm_tog   <= ~O_hrm_tog;
                 O_h2 <= h2_max;  O_h3 <= h3_max;
                 O_h4 <= h4_max;  O_h5 <= h5_max;
                 hcol_lat  <= O_hrm_col;                 // 下一帧的谐波窗口基准
-                hcol_vld  <= (pk_max >= 16'd16384);
+                hcol_vld  <= (pk_max >= 16'd8192);
             end
         end
     end
