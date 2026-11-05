@@ -1,7 +1,7 @@
 # AD9226 + HDMI 数字频谱分析仪（Tang Nano 20K / GW2AR-18）
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.2.0-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
+[![Release](https://img.shields.io/badge/release-v1.2.1-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
 [![Language](https://img.shields.io/badge/HDL-Verilog-orange.svg)](#)
 
 用一片 **高云 Tang Nano 20K**（GW2AR-18C）直采 **AD9226 12bit / 54 MSPS** ADC，
@@ -40,7 +40,7 @@ droop 边界，且时钟抖动直接变成采样误差。让 ADC 恒跑 54 MSPS�
 **为什么抽取比是 27 而不是 32**：54 / 27 = 2.000 MHz，跨度正好 1.000 MHz；取 32 则
 跨度 843.75 kHz，屏幕上刻度全是小数。
 
-### 1.1 时域谐波分解（v1.2.0 新增）
+### 1.1 时域谐波分解（v1.2.0 新增，v1.2.1 修文字与时基）
 
 KEY2 切到时域视图后，屏幕除了灰色原始采样波形，还会同时画出 **1~5 次谐波各自的分量
 正弦**（绿/青/品红/橙/紫，与频谱视图的谐波标记同色）：
@@ -53,8 +53,8 @@ FFT 的复数 bin：基波谐波检测给出 5 个 bin 的 (re, im)，用幅度�
 
 | 操作 | 作用 |
 |---|---|
-| 编码器旋转 | 时基档：显示记录的前 256 / 128 / 64 / 32 点（时间轴 ÷2 逐级） |
-| 编码器短按 | 幅度档：满屏 ±2V / ±1V / ±0.5V / ±0.25V |
+| 编码器旋转 | 时基档：显示记录的前 **1024 / 512 / 256 / 128** 点（默认 256 点，低频用 1024 点看整段） |
+| 编码器短按 | 幅度档：满屏 **±2V / ±1V / ±0.5V / ±0.25V / ±0.125V / ±0.0625V** |
 | KEY4 | 原始波形（灰线）开 / 关 |
 | KEY1 / KEY5 | 仍分别切跨度与窗函数（换跨度会改变采样率，也就是时间刻度） |
 
@@ -135,6 +135,10 @@ AD9226 的 14 根线全部走两侧 2×10 排针，避开所有复用脚（SPI F
 
 ## 5. 版本与发布
 
+- [v1.2.1](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases/tag/v1.2.1) —
+  时域视图上板反馈修复：27 处文字长度错位、字符发虚、左边缘竖线；时基改为
+  1024/512/256/128 点（原来越缩越窄，低频看不到一个周期）；幅度档扩到 6 档
+  （±2V…±0.0625V）；像素域组合链拆两级流水，时序拉回 TNS 全 0
 - [v1.2.0](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases/tag/v1.2.0) —
   时域视图新增 **1~5 次谐波分量同时显示**（FFT 复数 bin 重建），幅度四档 / 时基四档可调；
   比特流重出，TNS 全 0

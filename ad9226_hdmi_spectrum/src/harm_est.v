@@ -36,14 +36,15 @@ module harm_est (
     input             I_frame_ok,
     // ---- 基波列 (1024 列显示坐标) 与幅度档, 均为本时钟域同步后的准静态值 ----
     input      [9:0]  I_hcol    ,
-    input      [1:0]  I_amp     ,
+    input      [2:0]  I_amp     ,
+    input      [1:0]  I_zoom    ,   // 时基档: 0=1024点 1=512 2=256 3=128 (决定合成步长)
     // ---- 结果写入流 (由 wave_display 写入其内部乒乓 RAM) ----
     output reg        O_we      ,
     output reg  [7:0] O_addr    ,      // 列 0..255
     output reg [49:0] O_rows           // {lane5, lane4, lane3, lane2, lane1}, 各 10bit
 );
 
-    localparam integer NE = 512;       // 估计窗口 (样点)
+    localparam integer NE = 512;       // 估计窗口 (样点); 窗口太短时 5 个分量互相泄漏
     localparam integer NS = 256;       // 合成点数 (= 屏幕画的点数)
 
     //------------------------------------------------------------------
@@ -79,16 +80,20 @@ module harm_est (
     //------------------------------------------------------------------
     reg [2:0]  st;
     reg [2:0]  cyc;
-    reg [9:0]  n;
+    reg [10:0] n;      // 估计 0..NE-1 / 合成 0..NS-1
     reg [2:0]  kh;                        // 1..5
     reg [11:0] step1;                     // 2*hcol
+    // 合成步长: 一列谐波对应 4/2/1 个样点 (1024/512/256,128 点视图)
+    wire [11:0] st_base = {I_hcol, 1'b0};
+    wire [11:0] st_zoom = (I_zoom == 2'd0) ? (st_base <<< 2) :
+                          ((I_zoom == 2'd1) ? (st_base <<< 1) : st_base);
     reg [11:0] ph;                        // 估计相位累加
     reg [11:0] phk1, phk2, phk3, phk4, phk5;   // 合成相位累加 (每 lane 一个)
     reg [11:0] sk1, sk2, sk3, sk4, sk5;        // k*step1
     reg signed [43:0] acc_re, acc_im;
     reg signed [17:0] re1, im1, re2, im2, re3, im3, re4, im4, re5, im5;
     reg [49:0] rows_s;                    // 5 lane 行值移位寄存器
-    reg [1:0]  amp_r;
+    reg [2:0]  amp_r;
     reg        okd;                       // I_frame_ok 上一拍
     reg [3:0]  skip;                      // 帧采满后等几拍 (让最后一个样点落 RAM)
 
@@ -141,7 +146,7 @@ module harm_est (
     //   逆变换 x[n] = (2/N)*(re*cos + im*sin): 由 forward 定义 re=sum x*cos、im=sum x*sin
     //   推得 x[n] = (2/N)*(re*cos(theta) + im*sin(theta)), 所以这里是加不是减
     wire signed [34:0] y_full = {p1[33], p1} + {p2[33], p2};
-    wire        [3:0]  amp_sh = 4'd8 - {2'b00, amp_r};
+    wire        [3:0]  amp_sh = 4'd8 - {1'b0, amp_r};
     wire signed [34:0] y_amp  = y_full >>> 11;
     wire signed [34:0] y_sc   = y_amp  >>> amp_sh;
     wire signed [35:0] row_s  = 36'sd256 + {{1{y_sc[34]}}, y_sc};
@@ -183,7 +188,7 @@ module harm_est (
             re_c   <= 18'sd0; im_c  <= 18'sd0;
             p1     <= 34'sd0; p2    <= 34'sd0;
             rd_a   <= 10'd0;
-            amp_r  <= 2'd1;
+            amp_r  <= 3'd1;
             okd    <= 1'b0;
             skip   <= 4'd0;
             O_we   <= 1'b0;
@@ -207,12 +212,12 @@ module harm_est (
                 if (skip != 4'd0) begin
                     skip <= skip - 4'd1;
                 end else begin
-                    step1  <= {I_hcol, 1'b0};
-                    sk1    <= {I_hcol, 1'b0};
-                    sk2    <= {I_hcol, 1'b0} <<< 1;
-                    sk3    <= ({I_hcol, 1'b0} <<< 1) + {I_hcol, 1'b0};
-                    sk4    <= {I_hcol, 1'b0} <<< 2;
-                    sk5    <= ({I_hcol, 1'b0} <<< 2) + {I_hcol, 1'b0};
+                    step1  <= st_base;   // 估计用: 每样点相位步进 (与合成步长无关)
+                    sk1    <= st_zoom;
+                    sk2    <= st_zoom <<< 1;
+                    sk3    <= (st_zoom <<< 1) + st_zoom;
+                    sk4    <= st_zoom <<< 2;
+                    sk5    <= (st_zoom <<< 2) + st_zoom;
                     amp_r  <= I_amp;
                     n      <= 10'd0;
                     kh     <= 3'd1;

@@ -64,11 +64,16 @@ module tb_wave_harm;
 
     // ---------------- 谐波估计 (adc 域) ----------------
     // 100kHz @ fs=2MS/s -> bin 204.8 -> 显示列 102
-    localparam [9:0] HCOL = 10'd102;
+    reg  [9:0] HCOL = 10'd51;          // 由 +F0 换算: col = f0/1e6*1024
 
     wire        h_we;
     wire [7:0]  h_addr;
     wire [49:0] h_rows;
+
+    // ---------------- 像素域 ----------------
+    real       f0 = 100.0e3;      // +F0= 覆盖
+    integer    zi = 2;
+    reg  [1:0] zzq = 2'd2;        // +ZOOM= 覆盖 (0=1024 点 ... 3=128 点)
 
     harm_est u_harm (
         .I_clk      (aclk     ),
@@ -78,13 +83,13 @@ module tb_wave_harm;
         .I_wr_data  (wdata    ),
         .I_frame_ok (frame_ok ),
         .I_hcol     (HCOL     ),
-        .I_amp      (2'd1     ),
+        .I_zoom     (zzq      ),
+        .I_amp      (3'd1     ),
         .O_we       (h_we     ),
         .O_addr     (h_addr   ),
         .O_rows     (h_rows   )
     );
 
-    // ---------------- 像素域 ----------------
     reg pclk = 1'b0;
     always #(T_PIX/2.0) pclk = ~pclk;
 
@@ -100,8 +105,8 @@ module tb_wave_harm;
         .I_x           (x        ),
         .I_y           (y        ),
         .I_span        (span     ),
-        .I_amp         (2'd1     ),
-        .I_zoom        (2'd0     ),
+        .I_amp         (3'd1     ),
+        .I_zoom        (zzq      ),
         .I_orig        (1'b1     ),
         .I_hvalid      (1'b1     ),
         .I_hwe         (h_we     ),
@@ -134,7 +139,11 @@ module tb_wave_harm;
             wlut[k] = sum;
         end
         phase_acc = 32'd0;
-        phase_inc = $rtoi(100.0e3 / 54.0e6 * 4294967296.0);
+        $value$plusargs("F0=%f", f0);
+        $value$plusargs("ZOOM=%d", zi);
+        zzq = zi[1:0];
+        HCOL = $rtoi(f0/1.0e6*1024.0);
+        phase_inc = $rtoi(f0 / 54.0e6 * 4294967296.0);
     end
 
     always @(posedge aclk) begin
@@ -227,7 +236,7 @@ module tb_wave_harm;
 
         repeat (20) @(posedge pclk);
         scan_frame(0);
-        $display("tb_wave_harm done -> frames/wave_harm_000.ppm");
+        $display("tb_wave_harm done (f0=%0.0f zoom=%0d) -> frames/wave_harm_000.ppm", f0, zzq);
         $finish;
     end
 

@@ -204,8 +204,8 @@ module video_top
     // 时域视图控制量: 时基缩放 (编码器旋转) / 幅度档 (编码器短按) /
     //                原始波形开关 (KEY4)   -- 逻辑在 key_enc_ctrl 实例之后
     //------------------------------------------------------------------
-    reg  [1:0] wave_zoom;                 // 0=256pt 1=128pt 2=64pt 3=32pt
-    reg  [1:0] wave_amp;                  // 0=±2V 1=±1V 2=±0.5V 3=±0.25V
+    reg  [1:0] wave_zoom;                 // 0=1024pt 1=512pt 2=256pt(默认) 3=128pt
+    reg  [2:0] wave_amp;                  // 0=±2V 1=±1V 2=±.5V 3=±.25V 4=±.12V 5=±.06V
     reg        wave_orig;                 // 1=叠加原始波形 (灰线)
 
     wire csr_up, csr_dn, sw_press, sw_long, fine;
@@ -253,13 +253,13 @@ module video_top
     //------------------------------------------------------------------
     always @(posedge pix_clk or negedge hdmi4_rst_n) begin
         if (!hdmi4_rst_n) begin
-            wave_zoom <= 2'd0;
-            wave_amp  <= 2'd1;
+            wave_zoom <= 2'd2;   // 默认 256 点
+            wave_amp  <= 3'd1;
             wave_orig <= 1'b1;
         end else if (mode_wave) begin
             if (enc_up && (wave_zoom != 2'd3)) wave_zoom <= wave_zoom + 2'd1;
             if (enc_dn && (wave_zoom != 2'd0)) wave_zoom <= wave_zoom - 2'd1;
-            if (sw_press)                      wave_amp  <= wave_amp + 2'd1;
+            if (sw_press)                      wave_amp  <= (wave_amp >= 3'd5) ? 3'd0 : wave_amp + 3'd1;
             if (key_press[3])                  wave_orig <= ~wave_orig;
         end
     end
@@ -403,19 +403,26 @@ module video_top
     // 时域谐波分量: 用同一段采样记录做相关, 估出 1~5 次谐波的复幅度后
     // 重建 5 条正弦 (屏幕同时显示, 与原始波形同相位/同时间基)
     //------------------------------------------------------------------
-    wire [1:0]  wave_amp_adc;              // 幅度档同步到 ADC 时钟域
-    reg  [1:0]  amp_s0, amp_s1;
+    wire [2:0]  wave_amp_adc;              // 幅度档同步到 ADC 时钟域
+    wire [1:0]  wave_zoom_adc;             // 时基档同步到 ADC 时钟域 (决定谐波合成步长)
+    reg  [2:0]  amp_s0, amp_s1;
+    reg  [1:0]  zoom_s0, zoom_s1;
 
     always @(posedge adc_clk or negedge adc_rst_n) begin
         if (!adc_rst_n) begin
-            amp_s0 <= 2'd1;
-            amp_s1 <= 2'd1;
+            amp_s0  <= 3'd1;
+            amp_s1  <= 3'd1;
+            zoom_s0 <= 2'd2;
+            zoom_s1 <= 2'd2;
         end else begin
-            amp_s0 <= wave_amp;
-            amp_s1 <= amp_s0;
+            amp_s0  <= wave_amp;
+            amp_s1  <= amp_s0;
+            zoom_s0 <= wave_zoom;
+            zoom_s1 <= zoom_s0;
         end
     end
-    assign wave_amp_adc = amp_s1;
+    assign wave_amp_adc  = amp_s1;
+    assign wave_zoom_adc = zoom_s1;
 
     // 无基波时给 0 列: harm_est 内部步进为 0, 各行值停在 256 (显示端也会隐藏迹线)
     wire [9:0]  hcol_est = fft_hrm_valid ? fft_hrm_col : 10'd0;
@@ -433,6 +440,7 @@ module video_top
         .I_frame_ok (wave_frame_ok),
         .I_hcol     (hcol_est     ),
         .I_amp      (wave_amp_adc ),
+        .I_zoom     (wave_zoom_adc),
         .O_we       (hrm_we       ),
         .O_addr     (hrm_addr     ),
         .O_rows     (hrm_rows     )
