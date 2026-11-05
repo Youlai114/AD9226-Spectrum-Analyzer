@@ -194,13 +194,22 @@ module video_top
     //------------------------------------------------------------------
     reg  [1:0] csr_mode;                  // 0=关 1=普通 2=增量 (KEY4 循环)
     always @(posedge pix_clk or negedge hdmi4_rst_n) begin
-        if (!hdmi4_rst_n)      csr_mode <= 2'd0;
-        else if (key_press[3]) csr_mode <= (csr_mode == 2'd2) ? 2'd0 : (csr_mode + 2'd1);
+        if (!hdmi4_rst_n)                            csr_mode <= 2'd0;
+        else if (key_press[3] && !mode_wave)         csr_mode <= (csr_mode == 2'd2) ? 2'd0 : (csr_mode + 2'd1);
     end
     wire csr_en  = (csr_mode != 2'd0);
     wire mode_csr = csr_en & ~mode_wave;
 
+    //------------------------------------------------------------------
+    // 时域视图控制量: 时基缩放 (编码器旋转) / 幅度档 (编码器短按) /
+    //                原始波形开关 (KEY4)   -- 逻辑在 key_enc_ctrl 实例之后
+    //------------------------------------------------------------------
+    reg  [1:0] wave_zoom;                 // 0=256pt 1=128pt 2=64pt 3=32pt
+    reg  [1:0] wave_amp;                  // 0=±2V 1=±1V 2=±0.5V 3=±0.25V
+    reg        wave_orig;                 // 1=叠加原始波形 (灰线)
+
     wire csr_up, csr_dn, sw_press, sw_long, fine;
+    wire enc_up, enc_dn;                   // 编码器原始脉冲 (时域视图改时基用)
 
     reg  [9:0] csr_col;                    // 光标列 0..1023 (更新逻辑在 CDC 块之后)
 
@@ -223,14 +232,37 @@ module video_top
         .I_span_load     (span_load  ),
         .I_span_load_val (span_auto  ),
         .I_enc_mode      (mode_csr   ),
+        // 时域视图: 编码器不再改跨度 (改时基缩放), 短按也不翻精细档
+        .I_span_lock     (mode_wave  ),
+        .I_fine_en       (~mode_wave ),
         .O_csr_up        (csr_up     ),
         .O_csr_dn        (csr_dn     ),
+        .O_enc_up        (enc_up     ),
+        .O_enc_dn        (enc_dn     ),
         .O_sw_press      (sw_press   ),
         .O_sw_long       (sw_long    ),
         .O_fine          (fine       ),
         .O_span          (span       ),
         .O_key_press     (key_press  )
     );
+
+    //------------------------------------------------------------------
+    // 时域视图: 编码器旋转 = 时基缩放 (记录点数减半),
+    //           编码器短按 = 幅度档循环 (±2V/±1V/±0.5V/±0.25V),
+    //           KEY4       = 原始波形 (灰线) 显示开关
+    //------------------------------------------------------------------
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n) begin
+            wave_zoom <= 2'd0;
+            wave_amp  <= 2'd1;
+            wave_orig <= 1'b1;
+        end else if (mode_wave) begin
+            if (enc_up && (wave_zoom != 2'd3)) wave_zoom <= wave_zoom + 2'd1;
+            if (enc_dn && (wave_zoom != 2'd0)) wave_zoom <= wave_zoom - 2'd1;
+            if (sw_press)                      wave_amp  <= wave_amp + 2'd1;
+            if (key_press[3])                  wave_orig <= ~wave_orig;
+        end
+    end
 
     //======================================================================
     // AD9226 采集 -> FFT
@@ -365,6 +397,45 @@ module video_top
         .O_wr_start  (wcap_wr_start ),
         .O_frame_ok  (wave_frame_ok ),
         .O_cnt       (              )
+    );
+
+    //------------------------------------------------------------------
+    // 时域谐波分量: 用同一段采样记录做相关, 估出 1~5 次谐波的复幅度后
+    // 重建 5 条正弦 (屏幕同时显示, 与原始波形同相位/同时间基)
+    //------------------------------------------------------------------
+    wire [1:0]  wave_amp_adc;              // 幅度档同步到 ADC 时钟域
+    reg  [1:0]  amp_s0, amp_s1;
+
+    always @(posedge adc_clk or negedge adc_rst_n) begin
+        if (!adc_rst_n) begin
+            amp_s0 <= 2'd1;
+            amp_s1 <= 2'd1;
+        end else begin
+            amp_s0 <= wave_amp;
+            amp_s1 <= amp_s0;
+        end
+    end
+    assign wave_amp_adc = amp_s1;
+
+    // 无基波时给 0 列: harm_est 内部步进为 0, 各行值停在 256 (显示端也会隐藏迹线)
+    wire [9:0]  hcol_est = fft_hrm_valid ? fft_hrm_col : 10'd0;
+
+    wire        hrm_we;
+    wire [7:0]  hrm_addr;
+    wire [49:0] hrm_rows;
+
+    harm_est u_harm (
+        .I_clk      (adc_clk      ),
+        .I_rst_n    (adc_rst_n    ),
+        .I_wr_en    (wcap_we      ),
+        .I_wr_addr  (wcap_addr    ),
+        .I_wr_data  (wcap_data    ),
+        .I_frame_ok (wave_frame_ok),
+        .I_hcol     (hcol_est     ),
+        .I_amp      (wave_amp_adc ),
+        .O_we       (hrm_we       ),
+        .O_addr     (hrm_addr     ),
+        .O_rows     (hrm_rows     )
     );
 
     //------------------------------------------------------------------
@@ -518,12 +589,19 @@ module video_top
         .I_x           (px              ),
         .I_y           (py              ),
         .I_span        (span            ),
+        .I_amp         (wave_amp        ),
+        .I_zoom        (wave_zoom       ),
+        .I_orig        (wave_orig       ),
+        .I_hvalid      (hrm_valid_p     ),
         .I_wr_clk      (adc_clk         ),
         .I_wr_rst_n    (adc_rst_n       ),
         .I_frame_start (wcap_wr_start   ),
         .I_wr_en       (wcap_we         ),
         .I_wr_addr     (wcap_addr       ),
         .I_wr_mag      (wcap_data       ),
+        .I_hwe         (hrm_we          ),
+        .I_haddr       (hrm_addr        ),
+        .I_hrows       (hrm_rows        ),
         .O_r           (wave_r          ),
         .O_g           (wave_g          ),
         .O_b           (wave_b          )

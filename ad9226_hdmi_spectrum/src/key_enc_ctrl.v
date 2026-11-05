@@ -34,8 +34,12 @@ module key_enc_ctrl #(
     input             I_span_load,      // 单拍: 外部设置跨度 (AUTO 自动跨度)
     input      [2:0]  I_span_load_val,  // AUTO 给出的目标跨度 (0..4, 含 27MHz 宽频)
     input             I_enc_mode,       // 1: 编码器移光标 (O_csr_*), 0: 调跨度
+    input             I_span_lock,      // 1: 编码器不再改跨度 (时域视图里编码器改时基)
+    input             I_fine_en,        // 1: 允许短按翻 O_fine (时域视图下关掉)
     output reg        O_csr_up,         // 单拍: 光标 +步进 (仅 I_enc_mode=1 时)
     output reg        O_csr_dn,         // 单拍: 光标 -步进
+    output reg        O_enc_up,         // 单拍: 编码器原始 +1 (无论模式, 时域缩放用)
+    output reg        O_enc_dn,         // 单拍: 编码器原始 -1
     output reg        O_sw_press,       // 单拍: 编码器短按 (松开时, 未达长按阈值)
     output reg        O_sw_long,        // 单拍: 编码器长按 (Preset 用)
     output reg        O_fine,           // 精细模式状态 (短按翻转, 光标步进 4->1)
@@ -226,9 +230,9 @@ module key_enc_ctrl #(
             O_span <= I_span_load_val;                       // AUTO 加载
         end else if (O_key_press[0]) begin
             O_span <= (O_span >= SPAN_NUM - 1) ? 3'd0 : (O_span + 2'd1);  // KEY1 循环
-        end else if (e_up && !I_enc_mode) begin
+        end else if (e_up && !I_enc_mode && !I_span_lock) begin
             O_span <= (O_span >= SPAN_NUM - 1) ? (SPAN_NUM - 1) : (O_span + 2'd1);
-        end else if (e_dn && !I_enc_mode) begin
+        end else if (e_dn && !I_enc_mode && !I_span_lock) begin
             O_span <= (O_span == 2'd0) ? 2'd0 : (O_span - 2'd1);
         end
     end
@@ -241,15 +245,19 @@ module key_enc_ctrl #(
         if (!I_rst_n) begin
             O_csr_up   <= 1'b0;
             O_csr_dn   <= 1'b0;
+            O_enc_up   <= 1'b0;
+            O_enc_dn   <= 1'b0;
             O_sw_press <= 1'b0;
             O_sw_long  <= 1'b0;
             O_fine     <= 1'b0;
         end else begin
             O_csr_up   <= e_up & I_enc_mode;
             O_csr_dn   <= e_dn & I_enc_mode;
+            O_enc_up   <= e_up;
+            O_enc_dn   <= e_dn;
             O_sw_press <= sw_short;
             O_sw_long  <= sw_long;
-            if (sw_short && !I_enc_mode)
+            if (sw_short && !I_enc_mode && I_fine_en)
                 O_fine <= ~O_fine;
         end
     end

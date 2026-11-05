@@ -23,7 +23,7 @@ report() {  # name, ok(0=pass)
     else                   FAIL=$((FAIL+1)); RESULTS="$RESULTS  FAIL  $1\n"; fi
 }
 
-echo "=== [1/8] 编译全量 RTL + TB ==="
+echo "=== [1/9] 编译全量 RTL + TB ==="
 # work 库必须每次重建. 仓库曾把 ModelSim work/ 编译产物提交进 git, 于是
 # "回归通过"可能用的是几周前的旧比特库: 漏编译的模块 (例如 spec_demo_gen.v
 # 不在编译清单里) 会被旧库里残留的模块顶替, 改错 RTL 也照样 PASS.
@@ -36,13 +36,15 @@ rm -rf work
     ../src/key_enc_ctrl.v ../src/video_timing.v \
     ../src/spec_data_if.v ../src/spec_ram.v ../src/spec_display.v \
     ../src/spec_demo_gen.v ../src/wave_display.v ../src/ui_font_rom.v \
+    ../src/sincos_rom.v ../src/harm_est.v ../src/harm_ram.v \
     ../src/video_top.v ../src/gowin_rpll/TMDS_rPLL.v \
     tb_fft.v tb_frame.v tb_key_enc.v tb_wave_frame.v gw_stubs.v tb_top.v \
+    tb_harm.v \
     > $LOG/vlog.log 2>&1
 if [ $? -ne 0 ]; then echo "编译失败:"; grep -a Error $LOG/vlog.log; exit 1; fi
 echo "  编译通过"
 
-echo "=== [2/8] FFT 比特精确 (cmp_fft, 期望 0 LSB) ==="
+echo "=== [2/9] FFT 比特精确 (cmp_fft, 期望 0 LSB) ==="
 # 先删旧产物: vsim 挂掉时留下的上次结果会被误判为"通过"
 rm -f out/smp.txt out/mag.txt
 "$VSIM" -c -do "run -all; quit -f" work.tb_fft +F0=250e3 +AMP=2040 +DEC=0 > $LOG/fft.log 2>&1
@@ -57,7 +59,7 @@ else
     report "cmp_fft 0 LSB" 1
 fi
 
-echo "=== [3/8] 四窗幅度校准 (期望全 pass) ==="
+echo "=== [3/9] 四窗幅度校准 (期望全 pass) ==="
 OK=0
 for W in 1 2 3; do
     "$VSIM" -c -do "run -all; quit -f" work.tb_fft +F0=250e3 +AMP=2040 +DEC=0 +WIN=$W > $LOG/win$W.log 2>&1
@@ -65,27 +67,28 @@ for W in 1 2 3; do
 done
 report "四窗校准 (Rect/Black/Flat)" $OK
 
-echo "=== [4/8] 基波检测 (hrm_col 位置) ==="
+echo "=== [4/9] 基波检测 (hrm_col 位置) ==="
 "$VSIM" -c -do "run -all; quit -f" work.tb_fft +F0=100e3 +AMP=2040 +DEC=0 > $LOG/f100.log 2>&1
 grep -aq "hrm_col=102" $LOG/f100.log; report "基波列 100kHz->102" $?
 
-echo "=== [5/8] 人机界面 (key_enc, 期望 13/13) ==="
+echo "=== [5/9] 人机界面 (key_enc, 期望 13/13) ==="
 "$VSIM" -c -do "run -all; quit -f" work.tb_key_enc > $LOG/key.log 2>&1
 grep -aq "ALL PASS" $LOG/key.log; report "tb_key_enc 全部项" $?
 
-echo "=== [6/8] 时域波形 (逐列对拍) ==="
+echo "=== [6/9] 时域波形 (逐列对拍) ==="
 "$VSIM" -c -do "run -all; quit -f" work.tb_wave_frame > $LOG/wave.log 2>&1
 $PY ../tools/ppm2png.py frames/wave_000.ppm > /dev/null 2>&1
 $PY - > $LOG/wavechk.log 2>&1 <<'EOF'
 from PIL import Image
 px = Image.open('frames/wave_000.png').convert('RGB').load()
 cols = sum(1 for x in range(64,1088,4)
-           if any(abs(px[x,y][1]-232)<40 and abs(px[x,y][2]-100)<40 for y in range(104,616)))
+           if any(abs(px[x,y][0]-138)<40 and abs(px[x,y][1]-154)<40
+                  and abs(px[x,y][2]-168)<40 for y in range(104,616)))
 print("OK" if cols >= 250 else "NG cols=%d" % cols)
 EOF
 grep -q "^OK$" $LOG/wavechk.log; report "wave 迹线完整性" $?
 
-echo "=== [7/8] 顶层三时钟域 (F0/谐波表/标记/迹线) ==="
+echo "=== [7/9] 顶层三时钟域 (F0/谐波表/标记/迹线) ==="
 "$VSIM" -c -do "run -all; quit -f" work.tb_top +DUMP1=3 +DUMP2=4 > $LOG/top.log 2>&1
 $PY ../tools/ppm2png.py frames/top_004.ppm > /dev/null 2>&1
 $PY - > $LOG/topchk.log 2>&1 <<'EOF'
@@ -104,14 +107,19 @@ EOF
 grep -q "^OK$" $LOG/topchk.log && ! grep -aq "FAIL" $LOG/top.log
 report "tb_top F0/H表/标记/迹线" $?
 
-echo "=== [8/8] 光标跳峰 + Δ 模式 (KEY4 + 短按编码器) ==="
+echo "=== [8/9] 光标跳峰 + Δ 模式 (KEY4 + 短按编码器) ==="
 "$VSIM" -c -do "run -all; quit -f" work.tb_top +JUMP > $LOG/jump.log 2>&1
 grep -aq "pass: jump" $LOG/jump.log && grep -aq "pass: csr" $LOG/jump.log \
     && ! grep -aq "FAIL" $LOG/jump.log; report "光标跳峰 + Δ 模式透传" $?
+
+echo "=== [9/9] 时域谐波重建 (harm_est 5 lane) ==="
+"$VSIM" -c -do "run -all; quit -f" work.tb_harm > $LOG/harm.log 2>&1
+grep -aq "pass: harm" $LOG/harm.log && ! grep -aq "FAIL" $LOG/harm.log
+report "harm 谐波重建 5 lane" $?
 
 echo ""
 echo "==================== 回归汇总 ===================="
 echo -e "$RESULTS"
 echo "  通过 $PASS / $((PASS+FAIL))"
-if [ $FAIL -eq 0 ]; then echo "  ALL PASS"; else echo "  失败项日志: $LOG/{fft,win*,f100,key,wave,top,jump}.log"; fi
+if [ $FAIL -eq 0 ]; then echo "  ALL PASS"; else echo "  失败项日志: $LOG/{fft,win*,f100,key,wave,top,jump,harm}.log"; fi
 exit $FAIL

@@ -17,7 +17,10 @@
         <File path="src/ad9226_pll.v" type="file.verilog" enable="1"/>
         <File path="src/ad9226_capture.v" type="file.verilog" enable="1"/>
         <File path="src/wave_cap.v" type="file.verilog" enable="1"/>
-        <File path="src/wave_display.v" type="file.verilog" enable="1"/>
+        <File path="src/harm_est.v" type="file.verilog" enable="1"/>
+<File path="src/harm_ram.v" type="file.verilog" enable="1"/>
+<File path="src/sincos_rom.v" type="file.verilog" enable="1"/>
+<File path="src/wave_display.v" type="file.verilog" enable="1"/>
         <File path="src/fft4096.v" type="file.verilog" enable="1"/>
         <File path="src/fft_tables.v" type="file.verilog" enable="1"/>
         <File path="src/dvi_tx/dvi_tx.v" type="file.verilog" enable="1"/>

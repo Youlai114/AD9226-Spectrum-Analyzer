@@ -20,6 +20,10 @@ module tb_wave_probe;
     reg  [9:0]  w_addr = 10'd0;
     reg  [15:0] w_data = 16'd0;
 
+    reg         h_we = 1'b0, h_valid = 1'b0;
+    reg  [7:0]  h_addr = 8'd0;
+    reg  [49:0] h_rows = 50'd0;
+
     wire [7:0] r, g, b;
 
     wave_display u_dut (
@@ -28,6 +32,13 @@ module tb_wave_probe;
         .I_x           (x    ),
         .I_y           (y    ),
         .I_span        (span ),
+        .I_amp         (2'd1),
+        .I_zoom        (2'd0),
+        .I_orig        (1'b1),
+        .I_hvalid      (h_valid),
+        .I_hwe         (h_we ),
+        .I_haddr       (h_addr),
+        .I_hrows       (h_rows),
         .I_wr_clk      (pclk ),
         .I_wr_rst_n    (prst_n),
         .I_frame_start (w_fs ),

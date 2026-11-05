@@ -41,9 +41,13 @@ module tb_key_enc;
         .I_span_load (1'b0   ),
         .I_span_load_val (3'd0),
         .I_enc_mode  (1'b0   ),
+        .I_span_lock (1'b0   ),
+        .I_fine_en   (1'b1   ),
         .O_span      (span   ),
         .O_key_press (key_press),
-        .O_fine      (fine   )
+        .O_fine      (fine   ),
+        .O_enc_up    (       ),
+        .O_enc_dn    (       )
     );
 
     integer errs = 0;
