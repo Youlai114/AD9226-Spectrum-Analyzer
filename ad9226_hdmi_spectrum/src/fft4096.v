@@ -50,7 +50,7 @@ module fft4096 #(
 
     // ---- 基波峰值检测 (给 1~5 次谐波标记 + 谐波电平表) ----
     //   每帧找幅度最大的列 (排除 DC 附近 8 列和最高 8 列),
-    //   幅度 >= 16384 (约 -12 dBFS) 才认为有效, 否则 O_hrm_valid=0
+    //   幅度 >= 512 (约 -42 dBFS) 才认为有效, 否则 O_hrm_valid=0
     output reg [9:0]  O_hrm_col,        // 基波所在列
     output reg        O_hrm_valid,      // 本帧检测结果有效
     output reg        O_hrm_tog,        // 每次更新翻转一次 (跨时钟域握手)
@@ -631,12 +631,12 @@ module fft4096 #(
             if (in_w4 && (O_mag > h4_max)) h4_max <= O_mag;
             if (in_w5 && (O_mag > h5_max)) h5_max <= O_mag;
             if (O_mag_addr == 10'd1023) begin
-                O_hrm_valid <= (pk_max >= 16'd8192);    // -18 dBFS 门限 (方波/小信号也能认基波)
+                O_hrm_valid <= (pk_max >= 16'd512);     // -42 dBFS 门限 (声卡等小信号源也能认基波)
                 O_hrm_tog   <= ~O_hrm_tog;
                 O_h2 <= h2_max;  O_h3 <= h3_max;
                 O_h4 <= h4_max;  O_h5 <= h5_max;
                 hcol_lat  <= O_hrm_col;                 // 下一帧的谐波窗口基准
-                hcol_vld  <= (pk_max >= 16'd8192);
+                hcol_vld  <= (pk_max >= 16'd512);
             end
         end
     end
