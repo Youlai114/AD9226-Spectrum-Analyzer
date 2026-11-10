@@ -23,6 +23,8 @@ LICENSE text eol=lf
 *.zip  binary
 *.vo   binary
 *.hex  binary
+*.epro2 binary
+PCB/**  binary
 *.pof  binary
 *.bit  binary
 
