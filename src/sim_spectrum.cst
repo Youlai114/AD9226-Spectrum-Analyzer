@@ -1,0 +1,77 @@
+// ============================================================================
+// sim_spectrum.cst  --  引脚约束 (Tang Nano 20K / GW2AR-LV18QN88C8/I7)
+//   HDMI + 板载按键/LED (同 hdmi_spectrum) + AD9226 (同交接文档引脚表)
+// ============================================================================
+
+// ---------------- 板载: 27MHz 晶振 ----------------
+IO_LOC "I_clk" 4;
+IO_PORT "I_clk" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---------------- 板载复位 + 底板按键 / 编码器 / LED ----------------
+IO_LOC "I_rst" 88;
+IO_PORT "I_rst" IO_TYPE=LVCMOS33 PULL_MODE=DOWN SINGLE_RESISTOR=ON BANK_VCCIO=3.3;
+
+IO_LOC "I_key[0]" 15;
+IO_PORT "I_key[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_key[1]" 16;
+IO_PORT "I_key[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_key[2]" 17;
+IO_PORT "I_key[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_key[3]" 18;
+IO_PORT "I_key[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_key[4]" 19;
+IO_PORT "I_key[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+IO_LOC "I_enc_a" 48;
+IO_PORT "I_enc_a" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_enc_b" 49;
+IO_PORT "I_enc_b" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "I_enc_sw" 72;
+IO_PORT "I_enc_sw" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+IO_LOC "O_led[0]" 20;
+IO_PORT "O_led[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "O_led[1]" 71;
+IO_PORT "O_led[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------------- HDMI (4 对 LVDS) ----------------
+IO_LOC "O_tmds_clk_p" 33,34;
+IO_PORT "O_tmds_clk_p" IO_TYPE=LVDS25 PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+IO_LOC "O_tmds_data_p[0]" 35,36;
+IO_PORT "O_tmds_data_p[0]" IO_TYPE=LVDS25 PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+IO_LOC "O_tmds_data_p[1]" 37,38;
+IO_PORT "O_tmds_data_p[1]" IO_TYPE=LVDS25 PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+IO_LOC "O_tmds_data_p[2]" 39,40;
+IO_PORT "O_tmds_data_p[2]" IO_TYPE=LVDS25 PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+
+// ---------------- AD9226 接口 (14 根: 1 时钟 + 12 数据 + 1 OTR) ----------------
+IO_LOC "O_clk_adc" 76;
+IO_PORT "O_clk_adc" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+IO_LOC "I_adc_d[0]" 73;
+IO_PORT "I_adc_d[0]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[1]" 74;
+IO_PORT "I_adc_d[1]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[2]" 75;
+IO_PORT "I_adc_d[2]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[3]" 77;
+IO_PORT "I_adc_d[3]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[4]" 27;
+IO_PORT "I_adc_d[4]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[5]" 28;
+IO_PORT "I_adc_d[5]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[6]" 25;
+IO_PORT "I_adc_d[6]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[7]" 26;
+IO_PORT "I_adc_d[7]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[8]" 29;
+IO_PORT "I_adc_d[8]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[9]" 30;
+IO_PORT "I_adc_d[9]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[10]" 31;
+IO_PORT "I_adc_d[10]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "I_adc_d[11]" 41;
+IO_PORT "I_adc_d[11]" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+
+IO_LOC "I_adc_otr" 42;
+IO_PORT "I_adc_otr" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;

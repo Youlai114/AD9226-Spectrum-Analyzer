@@ -1,43 +1,11 @@
-# ---- Python ----
-.venv/
-__pycache__/
-
-# ---- AI 助手记忆目录 ----
-.workbuddy/
-.workbuddy-ai/
-
-# ---- ModelSim (work 库/日志/输出可全部再生) ----
-# 注意: 全部在 ad9226_hdmi_spectrum/sim/ 下, 少写一级前缀会失效
-# transcript 会落在"当前工作目录", 曾经从仓库根和工程根各漏进 git 一份
-/transcript
-/ad9226_hdmi_spectrum/transcript
-transcript
-ad9226_hdmi_spectrum/sim/work/
-ad9226_hdmi_spectrum/sim/cleanwork/
-ad9226_hdmi_spectrum/sim/transcript
-ad9226_hdmi_spectrum/sim/*.log
-ad9226_hdmi_spectrum/sim/out/
-ad9226_hdmi_spectrum/sim/frames/*.ppm
-ad9226_hdmi_spectrum/sim/modelsim.ini
-
-# ---- Gowin 中间产物 (保留 .fs 比特流 / rpt.txt / timing_paths) ----
-ad9226_hdmi_spectrum/impl/gwsynthesis/
-ad9226_hdmi_spectrum/impl/temp/
-ad9226_hdmi_spectrum/impl/pnr/*
-!ad9226_hdmi_spectrum/impl/pnr/ad9226_hdmi_spectrum.fs
-!ad9226_hdmi_spectrum/impl/pnr/*.rpt.txt
-!ad9226_hdmi_spectrum/impl/pnr/*.timing_paths
-ad9226_hdmi_spectrum/build.log
-# Gowin IDE 本机偏好 (非工程内容)
-*.gprj.user
-ad9226_hdmi_spectrum/src/dvi_tx/temp/
-ad9226_hdmi_spectrum/src/dvi_tx/*.vo
-ad9226_hdmi_spectrum/src/dvi_tx/*_tmp.v
-
-# ---- 历史工程的 EDA 中间产物 ----
-AD9226_FPGA_V1.1_65M/prj/db/
-AD9226_FPGA_V1.1_65M/prj/greybox_tmp/
-AD9226_FPGA_V1.1_65M/prj/incremental_db/
-hdmi_spectrum/impl/
-*.bak
-*.ppm
+# Gowin IDE / build artifacts
+impl/*
+!impl/pnr/
+impl/pnr/*
+!impl/pnr/Sim_Spectrum.fs
+!impl/pnr/Sim_Spectrum.rpt.txt
+!impl/pnr/Sim_Spectrum_tr_content.html
+*.user
+build.log
+.DS_Store
+Thumbs.db
