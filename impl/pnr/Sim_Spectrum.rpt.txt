@@ -12,27 +12,27 @@
   <Part Number>: GW2AR-LV18QN88C8/I7
   <Device>: GW2AR-18
   <Device Version>: C
-  <Created Time>:Sun Nov 15 22:28:34 2026
+  <Created Time>:Mon Nov 16 15:24:32 2026
 
 
 2. PnR Details
 
   Running placement:
     Placement Phase 0: CPU time = 0h 0m 4s, Elapsed time = 0h 0m 4s
-    Placement Phase 1: CPU time = 0h 0m 0.461s, Elapsed time = 0h 0m 0.461s
+    Placement Phase 1: CPU time = 0h 0m 0.46s, Elapsed time = 0h 0m 0.461s
     Placement Phase 2: CPU time = 0h 0m 9s, Elapsed time = 0h 0m 9s
-    Placement Phase 3: CPU time = 0h 0m 26s, Elapsed time = 0h 0m 26s
-    Total Placement: CPU time = 0h 0m 40s, Elapsed time = 0h 0m 40s
+    Placement Phase 3: CPU time = 0h 0m 28s, Elapsed time = 0h 0m 28s
+    Total Placement: CPU time = 0h 0m 41s, Elapsed time = 0h 0m 41s
  Running routing:
     Routing Phase 0: CPU time = 0h 0m 0.007s, Elapsed time = 0h 0m 0.007s
-    Routing Phase 1: CPU time = 0h 0m 0.531s, Elapsed time = 0h 0m 0.531s
-    Routing Phase 2: CPU time = 0h 0m 48s, Elapsed time = 0h 0m 48s
+    Routing Phase 1: CPU time = 0h 0m 0.553s, Elapsed time = 0h 0m 0.553s
+    Routing Phase 2: CPU time = 0h 0m 35s, Elapsed time = 0h 0m 35s
     Routing Phase 3: CPU time = 0h 0m 0s, Elapsed time = 0h 0m 0s
-    Total Routing: CPU time = 0h 0m 49s, Elapsed time = 0h 0m 49s
+    Total Routing: CPU time = 0h 0m 35s, Elapsed time = 0h 0m 35s
  Generate output files:
     CPU time = 0h 0m 2s, Elapsed time = 0h 0m 2s
 
- Total Time and Memory Usage: CPU time = 0h 1m 31s, Elapsed time = 0h 1m 31s, Peak memory usage = 584MB
+ Total Time and Memory Usage: CPU time = 0h 1m 18s, Elapsed time = 0h 1m 18s, Peak memory usage = 586MB
 
 
 3. Resource Usage Summary
@@ -40,15 +40,15 @@
   --------------------------------------------------------------------------------
   Resources                   | Usage                               | Utilization
   --------------------------------------------------------------------------------
-  Logic                       | 13455/20736                         |  65%
-    --LUT,ALU,ROM16           | 13437(10390 LUT, 3047 ALU, 0 ROM16) | -
+  Logic                       | 14220/20736                         |  69%
+    --LUT,ALU,ROM16           | 14202(11236 LUT, 2966 ALU, 0 ROM16) | -
     --SSRAM(RAM16)            | 3                                   | -
-  Register                    | 5300/15750                          |  34%
+  Register                    | 5470/15750                          |  35%
     --Logic Register as Latch | 0/15552                             |  0%
-    --Logic Register as FF    | 5285/15552                          |  34%
+    --Logic Register as FF    | 5455/15552                          |  36%
     --I/O Register as Latch   | 0/198                               |  0%
     --I/O Register as FF      | 15/198                              |  8%
-  CLS                         | 8335/10368                          |  81%
+  CLS                         | 8693/10368                          |  84%
   I/O Port                    | 34/66                               |  52%
   I/O Buf                     | 30                                  | -
     --Input Buf               | 23                                  | -
@@ -61,9 +61,9 @@
     --SDPX9B                  | 3
     --DPB                     | 16
     --pROM                    | 14
-  DSP                         | 18.5/24                             | 78%
+  DSP                         | 14.5/24                             | 61%
     --PADD18                  | 2
-    --MULT18X18               | 25
+    --MULT18X18               | 17
     --MULTALU36X18            | 3
     --MULTADDALU18X18         | 3
   ================================================================================
@@ -104,18 +104,18 @@
   -------------------------------------------
   Signal         | Global Clock   | Location
   -------------------------------------------
-  I_clk_d        | PRIMARY        |  BR BL
+  I_clk_d        | PRIMARY        |  TR BR BL
   pix_clk        | PRIMARY        |  TR TL BR BL
   O_clk_adc_d    | PRIMARY        |  TR TL BR BL
-  u_harm_synth/p_re_31_8| PRIMARY        |  TR BR
-  n240_6         | LW             |  -
+  n385_3         | PRIMARY        |  TR TL BR
+  n241_6         | LW             |  -
   cap_start      | LW             |  -
-  n385_3         | LW             |  -
   n36_6          | LW             |  -
   u_input/sw_long_p| LW             |  -
   u_fft_wrap/n8206_3| LW             |  -
   u_fft_wrap/s7_vld| LW             |  -
   u_fft_wrap/u_fft_ip/fft_top_inst/tf_inst/twBtfyParm_inst/slfRst_1| LW             |  -
+  u_display/u_text_rom/row39_sel_4_228| LW             |  -
   serial_clk     | HCLK           | BANK4_BANK5_HCLK0
   ===========================================
 

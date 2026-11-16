@@ -38,8 +38,9 @@ module ad9226_capture #(
     input      [11:0] I_adc_d,      // AD9226 D0..D11
     input             I_adc_otr,    // AD9226 OTR (过压标志, 高有效)
 
-    input      [2:0]  I_dec_sel,    // 0:/27(2M) 1:/108(500k) 2:/540(100k) 3:/2700(20k)
-                                    // 4:/27000(2k) 5:/108000(500) 6:/1(54M 宽频)
+    input      [3:0]  I_dec_sel,    // 0:/27(2M) 1:/108(500k) 2:/540(100k) 3:/2700(20k)
+                                    // 4:/27000(2k) 5:/108000(500) 6:/1(54M) 7:/54(1M)
+                                    // 8:/270(200k) 9:/10(5.4M) 10:/5(10.8M) 11:/2(27M)
     input             I_start,      // 单拍: 开始采集一帧
 
     output reg [15:0] O_smp,        // 有符号, Q4
@@ -66,39 +67,58 @@ module ad9226_capture #(
     //------------------------------------------------------------------
     //   ★ 深抽取 (27e3 / 108e3) 用 2^20 刻度, 结果右移 24 位; 其余用 2^16 刻度右移 20 位
     //     否则 16/108000 只有 10 这个整数可用, 增益误差 3%(0.26 dB)
-    wire [16:0] dec_n = (I_dec_sel == 3'd0) ? 17'd27     :
-                        (I_dec_sel == 3'd1) ? 17'd108    :
-                        (I_dec_sel == 3'd2) ? 17'd540    :
-                        (I_dec_sel == 3'd3) ? 17'd2700   :
-                        (I_dec_sel == 3'd4) ? 17'd27000  :
-                        (I_dec_sel == 3'd5) ? 17'd108000 :
-                        (I_dec_sel == 3'd7) ? 17'd54     : 17'd1;
-    wire [15:0] inv_n = (I_dec_sel == 3'd0) ? 16'd38836 :
-                        (I_dec_sel == 3'd1) ? 16'd9709  :
-                        (I_dec_sel == 3'd2) ? 16'd1942  :
-                        (I_dec_sel == 3'd3) ? 16'd388   :
-                        (I_dec_sel == 3'd4) ? 16'd621   :   // 2^20*16/27000
-                        (I_dec_sel == 3'd5) ? 16'd155   :   // 2^20*16/108000
-                        (I_dec_sel == 3'd7) ? 16'd19418 :   // 2^16*16/54
-                                              16'd65535;   // 直采不用
-    wire        dec_hi = (I_dec_sel == 3'd4) || (I_dec_sel == 3'd5);  // 深抽取: 右移 24
+    wire [17:0] dec_n = (I_dec_sel == 4'd0)  ? 18'd27     :
+                        (I_dec_sel == 4'd1)  ? 18'd135    :
+                        (I_dec_sel == 4'd2)  ? 18'd540    :
+                        (I_dec_sel == 4'd3)  ? 18'd2700   :
+                        (I_dec_sel == 4'd4)  ? 18'd27000  :
+                        (I_dec_sel == 4'd5)  ? 18'd135000 :
+                        (I_dec_sel == 4'd7)  ? 18'd54     :
+                        (I_dec_sel == 4'd8)  ? 18'd270    :
+                        (I_dec_sel == 4'd9)  ? 18'd10     :
+                        (I_dec_sel == 4'd10) ? 18'd5      :
+                        (I_dec_sel == 4'd11) ? 18'd2      :
+                        (I_dec_sel == 4'd12) ? 18'd1350   :
+                        (I_dec_sel == 4'd13) ? 18'd5400   :
+                        (I_dec_sel == 4'd14) ? 18'd13500  :
+                        (I_dec_sel == 4'd15) ? 18'd54000  : 18'd1;
+    wire [15:0] inv_n = (I_dec_sel == 4'd0)  ? 16'd38836 :
+                        (I_dec_sel == 4'd1)  ? 16'd7767  :   // 2^16*16/135
+                        (I_dec_sel == 4'd2)  ? 16'd1942  :
+                        (I_dec_sel == 4'd3)  ? 16'd388   :
+                        (I_dec_sel == 4'd4)  ? 16'd621   :   // 2^20*16/27000
+                        (I_dec_sel == 4'd5)  ? 16'd124   :   // 2^20*16/135000
+                        (I_dec_sel == 4'd7)  ? 16'd19418 :   // 2^16*16/54
+                        (I_dec_sel == 4'd8)  ? 16'd3884  :   // 2^16*16/270
+                        (I_dec_sel == 4'd9)  ? 16'd26214 :   // 2^14*16/10
+                        (I_dec_sel == 4'd10) ? 16'd52429 :   // 2^14*16/5
+                        (I_dec_sel == 4'd12) ? 16'd777   :   // 2^16*16/1350
+                        (I_dec_sel == 4'd13) ? 16'd3107  :   // 2^20*16/5400
+                        (I_dec_sel == 4'd14) ? 16'd1243  :   // 2^20*16/13500
+                        (I_dec_sel == 4'd15) ? 16'd311   :   // 2^20*16/54000
+                                               16'd65535;
+    wire        dec_hi  = (I_dec_sel == 4'd4) || (I_dec_sel == 4'd5) ||
+                          (I_dec_sel == 4'd13) || (I_dec_sel == 4'd14) || (I_dec_sel == 4'd15); // 右移 24
+    wire        dec_lo  = (I_dec_sel == 4'd9) || (I_dec_sel == 4'd10); // 浅抽取: 右移 14
+    wire        dec_div2= (I_dec_sel == 4'd11);                        // /2: 直接左移 3
 
-    reg  [16:0]        dec_cnt;
-    reg  signed [29:0] acc;                 // 最多 108000 x 2048 = 2.21e8
+    reg  [17:0]        dec_cnt;
+    reg  signed [29:0] acc;                 // 最多 135000 x 2048 = 2.76e8 < 2^29
     reg  signed [29:0] sum_l;               // 累加和 (打一拍)
     reg  signed [29:0] sum_l_d;             // sum_l 再打一拍 (直采路径对齐乘法路径延迟)
     reg  signed [45:0] mul;                 // 乘倒数 (30bit x 16bit)
     reg                en1, en2;
 
     wire signed [30:0] sum_now  = acc + x_s;
-    wire               take_now = (dec_cnt == dec_n - 17'd1);
-    wire               dec_raw  = (I_dec_sel == 3'd6);      // 宽频档 54 MSPS 直采
-    // 第 3 级取增益: 深抽取走 mul[39:24], 其余走 mul[35:20]
-    wire        [15:0] gain_q4  = dec_hi ? mul[39:24] : mul[35:20];
+    wire               take_now = (dec_cnt == dec_n - 18'd1);
+    wire               dec_raw  = (I_dec_sel == 4'd6);      // 宽频档 54 MSPS 直采
+    // 第 3 级取增益: 深抽取走 mul[39:24], 浅抽取走 mul[33:18], 其余走 mul[35:20]
+    wire        [15:0] gain_q4  = dec_hi ? mul[39:24] :
+                                  dec_lo ? mul[33:18] : mul[35:20];
 
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin
-            dec_cnt  <= 17'd0;
+            dec_cnt  <= 18'd0;
             acc      <= 30'sd0;
             sum_l    <= 30'sd0;
             sum_l_d  <= 30'sd0;
@@ -108,7 +128,7 @@ module ad9226_capture #(
             O_smp    <= 16'sd0;
             O_smp_en <= 1'b0;
         end else if (I_start) begin
-            dec_cnt  <= 17'd0;
+            dec_cnt  <= 18'd0;
             acc      <= 30'sd0;
             en1      <= 1'b0;
             en2      <= 1'b0;
@@ -116,12 +136,12 @@ module ad9226_capture #(
         end else begin
             // 第 1 级: 累加 / 出和
             if (take_now) begin
-                dec_cnt <= 17'd0;
+                dec_cnt <= 18'd0;
                 acc     <= 30'sd0;
                 sum_l   <= sum_now[29:0];
                 en1     <= 1'b1;
             end else begin
-                dec_cnt <= dec_cnt + 17'd1;
+                dec_cnt <= dec_cnt + 18'd1;
                 acc     <= sum_now[29:0];
                 en1     <= 1'b0;
             end
@@ -131,9 +151,10 @@ module ad9226_capture #(
             sum_l_d <= sum_l;
             en2     <= en1;
 
-            // 第 3 级: 还原幅度并对齐到 Q4; 直采时 sum_l_d 就是样点本身
-            O_smp    <= dec_raw ? $signed(sum_l_d[12:0]) <<< 4
-                                : $signed(gain_q4) <<< 4;
+            // 第 3 级: 还原幅度并对齐到 Q4; 直采与 /2 直接移位对齐
+            O_smp    <= dec_raw  ? ($signed(sum_l_d[12:0]) <<< 4) :
+                        dec_div2 ? ($signed(sum_l_d[13:0]) <<< 3) :
+                                   ($signed(gain_q4) <<< 4);
             O_smp_en <= en2;
         end
     end

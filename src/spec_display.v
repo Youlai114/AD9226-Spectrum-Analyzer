@@ -25,7 +25,7 @@ module spec_display (
     input             I_pix_rst_n  ,
     input      [11:0] I_x          ,   // 像素列
     input      [11:0] I_y          ,   // 像素行
-    input      [2:0]  I_span       ,   // 0:1M 1:250k 2:50k 3:10k 4:1k 5:250Hz 6:27M
+    input      [3:0]  I_span       ,   // 0:1M 1:250k 2:50k 3:10k 4:1k 5:250Hz 6:27M 7:500k 8:100k 9:2.7M 10:5.4M 11:13.5M
     input      [1:0]  I_win        ,
     input      [1:0]  I_det        ,
     input      [1:0]  I_trc        ,
@@ -438,19 +438,33 @@ module spec_display (
     wire [15:0] db_bcd_adj = bcd_add3(db_bcd);
     wire [15:0] v_bcd_adj  = bcd_add3(v_bcd);
 
-    reg [26:0] f_mul_val;
+    wire span_mhz    = (I_span == 4'd6) || (I_span == 4'd9) || (I_span == 4'd10) || (I_span == 4'd11);
+    wire span_twodec = span_mhz || (I_span == 4'd13) || (I_span == 4'd14);
+
+    reg [13:0] f_scale_k;
     always @(*) begin
         case (I_span)
-            3'd0: f_mul_val = pk_col_q3 * 14'd10000;
-            3'd1: f_mul_val = pk_col_q3 * 14'd2500;
-            3'd2: f_mul_val = pk_col_q3 * 14'd500;
-            3'd3: f_mul_val = pk_col_q3 * 14'd100;
-            3'd4: f_mul_val = pk_col_q3 * 14'd10000;
-            3'd5: f_mul_val = pk_col_q3 * 14'd2500;
-            3'd6: f_mul_val = pk_col_q3 * 14'd2700;
-            default: f_mul_val = 27'd0;
+            4'd0:    f_scale_k = 14'd10000; // 1.000 MHz (kHz, 1dec)
+            4'd1:    f_scale_k = 14'd2000;  // 200.0 kHz (kHz, 1dec)
+            4'd2:    f_scale_k = 14'd500;   // 50.00 kHz (kHz, 1dec)
+            4'd3:    f_scale_k = 14'd100;   // 10.00 kHz (kHz, 1dec)
+            4'd4:    f_scale_k = 14'd10000; // 1.000 kHz (Hz,  1dec)
+            4'd5:    f_scale_k = 14'd2000;  // 200.0 Hz  (Hz,  1dec)
+            4'd6:    f_scale_k = 14'd2700;  // 27.00 MHz (MHz, 2dec)
+            4'd7:    f_scale_k = 14'd5000;  // 500.0 kHz (kHz, 1dec)
+            4'd8:    f_scale_k = 14'd1000;  // 100.0 kHz (kHz, 1dec)
+            4'd9:    f_scale_k = 14'd270;   // 2.700 MHz (MHz, 2dec)
+            4'd10:   f_scale_k = 14'd540;   // 5.400 MHz (MHz, 2dec)
+            4'd11:   f_scale_k = 14'd1350;  // 13.50 MHz (MHz, 2dec)
+            4'd12:   f_scale_k = 14'd200;   // 20.00 kHz (kHz, 1dec)
+            4'd13:   f_scale_k = 14'd500;   // 5.000 kHz (kHz, 2dec)
+            4'd14:   f_scale_k = 14'd200;   // 2.000 kHz (kHz, 2dec)
+            4'd15:   f_scale_k = 14'd5000;  // 500.0 Hz  (Hz,  1dec)
+            default: f_scale_k = 14'd0;
         endcase
     end
+
+    wire [26:0] f_mul_val = pk_col_q3 * f_scale_k;
 
     reg [15:0] pk_abs_rl_r;
     reg [18:0] pk_den_r;
@@ -548,11 +562,11 @@ module spec_display (
                     f_bcd  <= 16'd0;
                     db_bcd <= 16'd0;
                     v_bcd  <= 16'd0;
-                    f_two_dec <= (I_span == 3'd6);
+                    f_two_dec <= span_twodec;
                     case (I_span)
-                        3'd4, 3'd5: f_unit_lat <= 24'h48_7A_20; // "Hz "
-                        3'd6:       f_unit_lat <= 24'h4D_48_7A; // "MHz"
-                        default:    f_unit_lat <= 24'h6B_48_7A; // "kHz"
+                        4'd4, 4'd5, 4'd15:        f_unit_lat <= 24'h48_7A_20; // "Hz "
+                        4'd6, 4'd9, 4'd10, 4'd11: f_unit_lat <= 24'h4D_48_7A; // "MHz"
+                        default:                  f_unit_lat <= 24'h6B_48_7A; // "kHz"
                     endcase
                     fmt_cnt <= 5'd3;
                 end else if (fmt_cnt <= 5'd16) begin
@@ -619,12 +633,21 @@ module spec_display (
     reg [23:0] td_unit_lat;
 
     wire [1:0]  td_tdec = (I_tscale == 4'd0) ? 2'd2 : (I_tscale == 4'd1) ? 2'd1 : 2'd0;
-    wire [14:0] td_span_2x = (I_span == 3'd0) ? 15'd20000 :
-                             (I_span == 3'd1) ? 15'd5000  :
-                             (I_span == 3'd2) ? 15'd1000  :
-                             (I_span == 3'd3) ? 15'd200   :
-                             (I_span == 3'd4) ? 15'd20000 :
-                             (I_span == 3'd5) ? 15'd5000  : 15'd5400;
+    wire [14:0] td_span_2x = (I_span == 4'd0)  ? 15'd20000 :
+                             (I_span == 4'd1)  ? 15'd4000  :
+                             (I_span == 4'd2)  ? 15'd1000  :
+                             (I_span == 4'd3)  ? 15'd200   :
+                             (I_span == 4'd4)  ? 15'd20000 :
+                             (I_span == 4'd5)  ? 15'd4000  :
+                             (I_span == 4'd7)  ? 15'd10000 :
+                             (I_span == 4'd8)  ? 15'd2000  :
+                             (I_span == 4'd9)  ? 15'd540   :
+                             (I_span == 4'd10) ? 15'd1080  :
+                             (I_span == 4'd11) ? 15'd2700  :
+                             (I_span == 4'd12) ? 15'd400   :
+                             (I_span == 4'd13) ? 15'd1000  :
+                             (I_span == 4'd14) ? 15'd400   :
+                             (I_span == 4'd15) ? 15'd10000 : 15'd5400;
     wire [12:0] td_rem_nxt   = {td_rem[11:0], td_num[24]};
     wire        td_ge        = (td_rem_nxt >= {1'b0, td_den});
     wire [15:0] td_wf_adj    = bcd_add3(td_wf_bcd);
@@ -665,11 +688,11 @@ module spec_display (
                 td_q        <= 25'd0;
                 td_high_lat <= I_high_smp;
                 td_psmp_lat <= I_period_smp;
-                td_two_dec  <= (I_span == 3'd6);
+                td_two_dec  <= span_twodec;
                 case (I_span)
-                    3'd4, 3'd5: td_unit_lat <= 24'h48_7A_20;
-                    3'd6:       td_unit_lat <= 24'h4D_48_7A;
-                    default:    td_unit_lat <= 24'h6B_48_7A;
+                    4'd4, 4'd5, 4'd15:        td_unit_lat <= 24'h48_7A_20;
+                    4'd6, 4'd9, 4'd10, 4'd11: td_unit_lat <= 24'h4D_48_7A;
+                    default:                  td_unit_lat <= 24'h6B_48_7A;
                 endcase
             end
         end else begin
@@ -773,24 +796,31 @@ module spec_display (
 
     function [24:0] tc_scale_mul;
         input [13:0] q2;
-        input [2:0]  sp;
-        reg [24:0] q;
+        input [3:0]  sp;
+        reg [24:0] q, q474;
         begin
-            q = {11'd0, q2};
+            q    = {11'd0, q2};
+            q474 = (q << 9) - (q << 5) - (q << 2) - (q << 1); // *474
             case (sp)
-                3'd0, 3'd3, 3'd4: tc_scale_mul = (q << 10) + (q << 8);                          // *1280
-                3'd1, 3'd5:       tc_scale_mul = (q << 5) + (q << 4) + (q << 1) + q;            // *51
-                3'd2:             tc_scale_mul = (q << 8);                                      // *256
-                default:          tc_scale_mul = (q << 9) - (q << 5) - (q << 2) - (q << 1);     // *474
+                4'd0, 4'd3, 4'd4: tc_scale_mul = (q << 10) + (q << 8);              // *1280
+                4'd1, 4'd5:       tc_scale_mul = (q << 6);                          // *64 (200k, 200Hz)
+                4'd2, 4'd13, 4'd15: tc_scale_mul = (q << 8);                        // *256 (50k, 5k, 500Hz)
+                4'd7:             tc_scale_mul = (q << 11) + (q << 9);              // *2560
+                4'd8:             tc_scale_mul = (q << 7);                          // *128
+                4'd10:            tc_scale_mul = (q474 << 2) + q474;                // *2370
+                4'd11:            tc_scale_mul = (q474 << 1);                       // *948
+                4'd12, 4'd14:     tc_scale_mul = (q << 9) + (q << 7);               // *640 (20k, 2k)
+                default:          tc_scale_mul = q474;                              // *474 (6, 9)
             endcase
         end
     endfunction
 
-    reg [29:0] tc_key_prev;
-    wire [29:0] tc_key_cur = {I_view, I_span, I_tscale, I_mkr_col, I_mkr_ref_col, I_mkr_delta};
-    reg [1:0]  tc_st;
+    reg [30:0] tc_key_prev;
+    wire [30:0] tc_key_cur = {I_view, I_span, I_tscale, I_mkr_col, I_mkr_ref_col, I_mkr_delta};
+    reg [2:0]  tc_st;
     reg [4:0]  tc_cnt;
     reg [13:0] tc_q2_1, tc_q2_2;
+    reg [14:0] tc_t1_v_r, tc_dt_v_r;
     reg [16:0] tc_num, tc_q;
     reg [14:0] tc_rem;
     reg [13:0] tc_den, tc_t1_bin, tc_dt_bin, tc_idt_bin;
@@ -808,19 +838,20 @@ module spec_display (
     wire [15:0] tc_dt_adj  = bcd_add3(tc_dt_bcd);
     wire [15:0] tc_idt_adj = bcd_add3(tc_idt_bcd);
 
-    reg [6:0]  tx_key_prev;
-    wire [6:0] tx_key_cur = {I_span, I_tscale};
-    reg [1:0]  tx_st, tx_idx;
+    reg [7:0]  tx_key_prev;
+    wire [7:0] tx_key_cur = {I_span, I_tscale};
+    reg [2:0]  tx_st;
+    reg [1:0]  tx_idx;
     reg [4:0]  tx_cnt;
     reg [13:0] tx_q2, tx_bin;
+    reg [14:0] tx_v_r;
     reg [15:0] tx_bcd;
     reg        tx_over, tx_twodec;
     wire [9:0]  tx_dx = (tx_idx == 2'd0) ? 10'd256 :
                         (tx_idx == 2'd1) ? 10'd512 :
                         (tx_idx == 2'd2) ? 10'd768 : 10'd1023;
     wire [24:0] tx_mul = tc_scale_mul(tx_q2, I_span);
-    wire [14:0] tx_v   = tx_mul[24:10];
-    wire [13:0] tx_div10 = (tx_v >> 4) + (tx_v >> 5) + (tx_v >> 8) + (tx_v >> 9) + (tx_v >> 12);
+    wire [13:0] tx_div10 = (tx_v_r >> 4) + (tx_v_r >> 5) + (tx_v_r >> 8) + (tx_v_r >> 9) + (tx_v_r >> 12);
     wire [15:0] tx_bcd_adj = bcd_add3(tx_bcd);
     wire [31:0] tx_fmt_str = tx_over ? (
                                  tx_twodec ? {
@@ -843,11 +874,12 @@ module spec_display (
 
     always @(posedge I_pix_clk or negedge I_pix_rst_n) begin
         if (!I_pix_rst_n) begin
-            tx_key_prev <= 7'h7F;
-            tx_st       <= 2'd0;
+            tx_key_prev <= 8'hFF;
+            tx_st       <= 3'd0;
             tx_idx      <= 2'd0;
             tx_cnt      <= 5'd0;
             tx_q2       <= 14'd0;
+            tx_v_r      <= 15'd0;
             tx_bin      <= 14'd0;
             tx_bcd      <= 16'd0;
             tx_over     <= 1'b0;
@@ -858,23 +890,28 @@ module spec_display (
             tx4_str     <= 32'h54_49_4D_45;
         end else if (tx_key_cur != tx_key_prev) begin
             tx_key_prev <= tx_key_cur;
-            tx_twodec   <= (I_span == 3'd1) || (I_span == 3'd2) || (I_span == 3'd3) || (I_span == 3'd5) || (I_span == 3'd6);
+            tx_twodec   <= (I_span == 4'd1) || (I_span == 4'd2) || (I_span == 4'd3) || (I_span == 4'd5) ||
+                           (I_span == 4'd6) || (I_span == 4'd8) || (I_span == 4'd10) || (I_span == 4'd11) || (I_span == 4'd12);
             tx_idx      <= 2'd0;
-            tx_st       <= 2'd1;
+            tx_st       <= 3'd1;
         end else begin
             case (tx_st)
-                2'd1: begin
+                3'd1: begin
                     tx_q2 <= px_to_q2(tx_dx, I_tscale);
-                    tx_st <= 2'd2;
+                    tx_st <= 3'd2;
                 end
-                2'd2: begin
-                    tx_over <= (tx_v > 15'd9999);
-                    tx_bin  <= (tx_v > 15'd9999) ? tx_div10 : tx_v[13:0];
+                3'd2: begin
+                    tx_v_r <= tx_mul[24:10];
+                    tx_st  <= 3'd3;
+                end
+                3'd3: begin
+                    tx_over <= (tx_v_r > 15'd9999);
+                    tx_bin  <= (tx_v_r > 15'd9999) ? tx_div10 : tx_v_r[13:0];
                     tx_bcd  <= 16'd0;
                     tx_cnt  <= 5'd0;
-                    tx_st   <= 2'd3;
+                    tx_st   <= 3'd4;
                 end
-                2'd3: begin
+                3'd4: begin
                     if (tx_cnt < 5'd14) begin
                         tx_bcd <= {tx_bcd_adj[14:0], tx_bin[13]};
                         tx_bin <= {tx_bin[12:0], 1'b0};
@@ -887,25 +924,27 @@ module spec_display (
                             2'd3: tx4_str <= tx_fmt_str;
                         endcase
                         if (tx_idx == 2'd3) begin
-                            tx_st <= 2'd0;
+                            tx_st <= 3'd0;
                         end else begin
                             tx_idx <= tx_idx + 2'd1;
-                            tx_st  <= 2'd1;
+                            tx_st  <= 3'd1;
                         end
                     end
                 end
-                default: tx_st <= 2'd0;
+                default: tx_st <= 3'd0;
             endcase
         end
     end
 
     always @(posedge I_pix_clk or negedge I_pix_rst_n) begin
         if (!I_pix_rst_n) begin
-            tc_key_prev  <= 30'd0;
-            tc_st        <= 2'd0;
+            tc_key_prev  <= 31'd0;
+            tc_st        <= 3'd0;
             tc_cnt       <= 5'd0;
             tc_q2_1      <= 14'd0;
             tc_q2_2      <= 14'd0;
+            tc_t1_v_r    <= 15'd0;
+            tc_dt_v_r    <= 15'd0;
             tc_num       <= 17'd0;
             tc_q         <= 17'd0;
             tc_rem       <= 15'd0;
@@ -928,19 +967,25 @@ module spec_display (
             tc_key_prev  <= tc_key_cur;
             tc_q2_1      <= px_to_q2(I_mkr_col, I_tscale);
             tc_q2_2      <= px_to_q2(tc_dx2, I_tscale);
-            tc_t_twodec  <= (I_span == 3'd1) || (I_span == 3'd2) || (I_span == 3'd3) || (I_span == 3'd5) || (I_span == 3'd6);
-            tc_f_twodec  <= (I_span == 3'd6);
+            tc_t_twodec  <= (I_span == 4'd1) || (I_span == 4'd2) || (I_span == 4'd3) || (I_span == 4'd5) ||
+                            (I_span == 4'd6) || (I_span == 4'd8) || (I_span == 4'd10) || (I_span == 4'd11) || (I_span == 4'd12);
+            tc_f_twodec  <= span_twodec;
             case (I_span)
-                3'd0, 3'd6: tc_tunit_lat <= 24'h75_73_20; // "us "
-                3'd5:       tc_tunit_lat <= 24'h73_20_20; // "s  "
-                default:    tc_tunit_lat <= 24'h6D_73_20; // "ms "
+                4'd0, 4'd6, 4'd7, 4'd9, 4'd10, 4'd11: tc_tunit_lat <= 24'h75_73_20; // "us "
+                4'd5:                                 tc_tunit_lat <= 24'h73_20_20; // "s  "
+                default:                              tc_tunit_lat <= 24'h6D_73_20; // "ms "
             endcase
-            tc_st <= 2'd1;
+            tc_st <= 3'd1;
         end else begin
             case (tc_st)
-                2'd1: begin
-                    tc_t1_bin <= (tc_t1_mul[24:10] > 15'd9999) ? 14'd9999 : tc_t1_mul[23:10];
-                    tc_dt_bin <= (tc_dt_mul[24:10] > 15'd9999) ? 14'd9999 : tc_dt_mul[23:10];
+                3'd1: begin
+                    tc_t1_v_r <= tc_t1_mul[24:10];
+                    tc_dt_v_r <= tc_dt_mul[24:10];
+                    tc_st     <= 3'd2;
+                end
+                3'd2: begin
+                    tc_t1_bin <= (tc_t1_v_r > 15'd9999) ? 14'd9999 : tc_t1_v_r[13:0];
+                    tc_dt_bin <= (tc_dt_v_r > 15'd9999) ? 14'd9999 : tc_dt_v_r[13:0];
                     if (I_mkr_delta && (tc_q2_2 != 14'd0)) begin
                         tc_num     <= {td_span_2x, 2'b00};
                         tc_den     <= tc_q2_2;
@@ -948,7 +993,7 @@ module spec_display (
                         tc_q       <= 17'd0;
                         tc_cnt     <= 5'd0;
                         tc_idt_vld <= 1'b1;
-                        tc_st      <= 2'd2;
+                        tc_st      <= 3'd3;
                     end else begin
                         tc_idt_bin <= 14'd0;
                         tc_idt_vld <= 1'b0;
@@ -956,10 +1001,10 @@ module spec_display (
                         tc_dt_bcd  <= 16'd0;
                         tc_idt_bcd <= 16'd0;
                         tc_cnt     <= 5'd0;
-                        tc_st      <= 2'd3;
+                        tc_st      <= 3'd4;
                     end
                 end
-                2'd2: begin
+                3'd3: begin
                     if (tc_cnt < 5'd17) begin
                         tc_rem <= tc_ge ? (tc_rem_nxt - {1'b0, tc_den}) : tc_rem_nxt;
                         tc_q   <= {tc_q[15:0], tc_ge};
@@ -971,10 +1016,10 @@ module spec_display (
                         tc_dt_bcd  <= 16'd0;
                         tc_idt_bcd <= 16'd0;
                         tc_cnt     <= 5'd0;
-                        tc_st      <= 2'd3;
+                        tc_st      <= 3'd4;
                     end
                 end
-                2'd3: begin
+                3'd4: begin
                     if (tc_cnt < 5'd14) begin
                         tc_t1_bcd  <= {tc_t1_adj[14:0], tc_t1_bin[13]};
                         tc_t1_bin  <= {tc_t1_bin[12:0], 1'b0};
@@ -984,7 +1029,7 @@ module spec_display (
                         tc_idt_bin <= {tc_idt_bin[12:0], 1'b0};
                         tc_cnt     <= tc_cnt + 5'd1;
                     end else begin
-                        tc_st  <= 2'd0;
+                        tc_st  <= 3'd0;
                         t_unit <= tc_tunit_lat;
                         if (tc_t_twodec) begin
                             t1_str <= {
@@ -1075,19 +1120,7 @@ module spec_display (
                             (aux_phase == 4'd10) ? h3_col_lat :
                             (aux_phase == 4'd11) ? h4_col_lat : h5_col_lat;
 
-    reg [23:0] aux_f_mul;
-    always @(*) begin
-        case (I_span)
-            3'd0: aux_f_mul = aux_f_col_r * 14'd10000;
-            3'd1: aux_f_mul = aux_f_col_r * 14'd2500;
-            3'd2: aux_f_mul = aux_f_col_r * 14'd500;
-            3'd3: aux_f_mul = aux_f_col_r * 14'd100;
-            3'd4: aux_f_mul = aux_f_col_r * 14'd10000;
-            3'd5: aux_f_mul = aux_f_col_r * 14'd2500;
-            3'd6: aux_f_mul = aux_f_col_r * 14'd2700;
-            default: aux_f_mul = 24'd0;
-        endcase
-    end
+    wire [23:0] aux_f_mul = aux_f_col_r * f_scale_k;
 
     wire [15:0] h_cur_mag = (aux_phase == 4'd2) ? h2_lat :
                             (aux_phase == 4'd3) ? h3_lat :
@@ -1095,7 +1128,7 @@ module spec_display (
 
     wire harm_f_vld = (aux_phase == 4'd8) ? (pk_col_lat >= 10'd3) : (aux_f_col_r != 10'd0);
     wire [47:0] h_f_fmt_str = !harm_f_vld ? 48'h20_20_2D_2D_2D_20 :
-                              (I_span == 3'd6) ? {
+                              span_twodec ? {
                                   8'h20,
                                   (a_bcd[15:12] != 4'd0) ? (8'h30 + {4'd0, a_bcd[15:12]}) : 8'h20,
                                   8'h30 + {4'd0, a_bcd[11:8]}, 8'h2E,
@@ -1207,7 +1240,7 @@ module spec_display (
                     b_bcd <= {b_bcd_adj[14:0], b_bin[13]};  b_bin <= {b_bin[12:0], 1'b0};
                     aux_cnt <= aux_cnt + 6'd1;
                 end else begin
-                    if (I_span == 3'd6) begin
+                    if (span_twodec) begin
                         mkr_f_str <= {
                             8'h20,
                             (a_bcd[15:12] != 4'd0) ? (8'h30 + {4'd0, a_bcd[15:12]}) : 8'h20,
@@ -1388,7 +1421,7 @@ module spec_display (
                     b_bcd <= {b_bcd_adj[14:0], b_bin[13]};  b_bin <= {b_bin[12:0], 1'b0};
                     aux_cnt <= aux_cnt + 6'd1;
                 end else begin
-                    if (I_span == 3'd6) begin
+                    if (span_twodec) begin
                         dmkr_f_str <= {
                             df_neg ? 8'h2D : 8'h2B,
                             (a_bcd[15:12] != 4'd0) ? (8'h30 + {4'd0, a_bcd[15:12]}) : 8'h20,
@@ -1869,16 +1902,22 @@ module spec_display (
     wire grid_min  = ((xr[5:0] == 6'd0) && (yr[2:0] == 3'd0)) ||
                      ((yr[4:0] == 5'd0) && (xr[2:0] == 3'd0)); // 16x16 次格疏点线
 
-    wire spec_en   = (I_view == 2'd0) || ((I_view == 2'd1) && (yr < 10'd255));
-    wire wave_en   = (I_view == 2'd2) || ((I_view == 2'd1) && (yr >= 10'd257));
-    wire split_div = (I_view == 2'd1) && ((yr == 10'd255) || (yr == 10'd256));
+    reg [1:0] view_s5;
+    always @(posedge I_pix_clk or negedge I_pix_rst_n) begin
+        if (!I_pix_rst_n) view_s5 <= 2'd0;
+        else              view_s5 <= I_view;
+    end
+
+    wire spec_en   = (view_s5 == 2'd0) || ((view_s5 == 2'd1) && (yr < 10'd255));
+    wire wave_en   = (view_s5 == 2'd2) || ((view_s5 == 2'd1) && (yr >= 10'd257));
+    wire split_div = (view_s5 == 2'd1) && ((yr == 10'd255) || (yr == 10'd256));
     wire on_trig_line = wave_en && tlvl_en_r && (yr == tlvl_row_r) && (xr[3:2] != 2'b00);
 
-    wire [9:0] bar_s      = (I_view == 2'd1) ? {1'b0, bar4[9:1]}      : bar4;
-    wire [9:0] prev_s     = (I_view == 2'd1) ? {1'b0, prev4[9:1]}     : prev4;
-    wire [9:0] ref_s      = (I_view == 2'd1) ? {1'b0, ref4[9:1]}      : ref4;
-    wire [9:0] ref_prev_s = (I_view == 2'd1) ? {1'b0, ref_prev4[9:1]} : ref_prev4;
-    wire [9:0] pk_s       = (I_view == 2'd1) ? {1'b0, pk4[9:1]}       : pk4;
+    wire [9:0] bar_s      = (view_s5 == 2'd1) ? {1'b0, bar4[9:1]}      : bar4;
+    wire [9:0] prev_s     = (view_s5 == 2'd1) ? {1'b0, prev4[9:1]}     : prev4;
+    wire [9:0] ref_s      = (view_s5 == 2'd1) ? {1'b0, ref4[9:1]}      : ref4;
+    wire [9:0] ref_prev_s = (view_s5 == 2'd1) ? {1'b0, ref_prev4[9:1]} : ref_prev4;
+    wire [9:0] pk_s       = (view_s5 == 2'd1) ? {1'b0, pk4[9:1]}       : pk4;
 
     wire [9:0] seg_lo = (bar_s < prev_s) ? bar_s : prev_s;
     wire [9:0] seg_hi = (bar_s < prev_s) ? prev_s : bar_s;
@@ -1914,10 +1953,10 @@ module spec_display (
     wire on_ha4 = ha_en && (yr >= ha4_lo4) && (yr <= ha4_hi4);
     wire on_ha5 = ha_en && (yr >= ha5_lo4) && (yr <= ha5_hi4);
 
-    wire mkr_vis    = spec_en || (I_view == 2'd2);
+    wire mkr_vis    = spec_en || (view_s5 == 2'd2);
     wire on_mkr     = mkr_en && mkr_vis && in_plot && (xr == eff_mkr_col) && yr[2];
     wire on_mkr_ref = mkr_en && I_mkr_delta && mkr_vis && in_plot && (xr == I_mkr_ref_col) && (yr[2] ^ yr[1]);
-    wire [9:0] lim_yr = (I_view == 2'd1) ? {1'b0, lim_y4[9:1]} : lim_y4;
+    wire [9:0] lim_yr = (view_s5 == 2'd1) ? {1'b0, lim_y4[9:1]} : lim_y4;
     wire on_lim_line = spec_en && in_plot && (I_lim_lvl != 4'd0) && (lim_lv_r >= ref_lv_r) && (yr == lim_yr) && xr[2];
 
     // 1~5 次谐波位置标记: 顶部倒三角 (yr=2..4) + 稀疏点线 (yr[3:2]==0)

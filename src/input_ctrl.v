@@ -25,7 +25,7 @@ module input_ctrl #(
     input             I_ovr       ,
     input      [9:0]  I_pk_col    ,
     input             I_pk_tog    ,
-    output reg [2:0]  O_span      ,   // 0:1M 1:250k 2:50k 3:10k 4:1k 5:250Hz 6:27M
+    output reg [3:0]  O_span      ,   // 0:1M 1:250k 2:50k 3:10k 4:1k 5:250Hz 6:27M 7:500k 8:100k 9:2.7M 10:5.4M 11:13.5M
     output reg [1:0]  O_win       ,   // 0:Hann 1:Rect 2:Black 3:FlatTop
     output reg [1:0]  O_det       ,   // 0:PosPeak 1:Avg 2:NegPeak 3:Sample
     output reg [1:0]  O_trc       ,   // 0:ClearWrite 1:MaxHold 2:MinHold 3:View
@@ -193,6 +193,56 @@ module input_ctrl #(
     //------------------------------------------------------------------
     // 参数控制 + KEY3 AUTO Span 状态机
     //------------------------------------------------------------------
+    function [3:0] span_next;
+        input [3:0] s;
+        begin
+            case (s)
+                4'd0:  span_next = 4'd7;  // 1M -> 500k
+                4'd7:  span_next = 4'd1;  // 500k -> 200k
+                4'd1:  span_next = 4'd8;  // 200k -> 100k
+                4'd8:  span_next = 4'd2;  // 100k -> 50k
+                4'd2:  span_next = 4'd12; // 50k -> 20k
+                4'd12: span_next = 4'd3;  // 20k -> 10k
+                4'd3:  span_next = 4'd13; // 10k -> 5k
+                4'd13: span_next = 4'd14; // 5k -> 2k
+                4'd14: span_next = 4'd4;  // 2k -> 1k
+                4'd4:  span_next = 4'd15; // 1k -> 500Hz
+                4'd15: span_next = 4'd5;  // 500Hz -> 200Hz
+                4'd5:  span_next = 4'd6;  // 200Hz -> 27M
+                4'd6:  span_next = 4'd11; // 27M -> 13.5M
+                4'd11: span_next = 4'd10; // 13.5M -> 5.4M
+                4'd10: span_next = 4'd9;  // 5.4M -> 2.7M
+                4'd9:  span_next = 4'd0;  // 2.7M -> 1M
+                default: span_next = 4'd0;
+            endcase
+        end
+    endfunction
+
+    function [3:0] span_prev;
+        input [3:0] s;
+        begin
+            case (s)
+                4'd0:  span_prev = 4'd9;
+                4'd9:  span_prev = 4'd10;
+                4'd10: span_prev = 4'd11;
+                4'd11: span_prev = 4'd6;
+                4'd6:  span_prev = 4'd5;
+                4'd5:  span_prev = 4'd15;
+                4'd15: span_prev = 4'd4;
+                4'd4:  span_prev = 4'd14;
+                4'd14: span_prev = 4'd13;
+                4'd13: span_prev = 4'd3;
+                4'd3:  span_prev = 4'd12;
+                4'd12: span_prev = 4'd2;
+                4'd2:  span_prev = 4'd8;
+                4'd8:  span_prev = 4'd1;
+                4'd1:  span_prev = 4'd7;
+                4'd7:  span_prev = 4'd0;
+                default: span_prev = 4'd0;
+            endcase
+        end
+    endfunction
+
     wire step_up = enc_cw;
     wire step_dn = enc_ccw;
 
@@ -208,7 +258,7 @@ module input_ctrl #(
             pk_tog_s2   <= 1'b0;
             auto_busy   <= 1'b0;
             auto_wait   <= 2'd0;
-            O_span      <= 3'd0;    // 默认 1.000 MHz
+            O_span      <= 4'd0;    // 默认 1.000 MHz
             O_win       <= 2'd0;    // Hann
             O_det       <= 2'd0;    // Pos Peak
             O_trc       <= 2'd0;    // Clear Write
@@ -238,7 +288,7 @@ module input_ctrl #(
             O_menu_sel    <= 4'd0;
         end else if (sw_long_p) begin
             auto_busy     <= 1'b0;
-            O_span        <= 3'd0;
+            O_span        <= 4'd0;
             O_win         <= 2'd0;
             O_det         <= 2'd0;
             O_trc         <= 2'd0;
@@ -273,7 +323,7 @@ module input_ctrl #(
             // KEY1: Span 循环
             if (key_press[0]) begin
                 auto_busy <= 1'b0;
-                O_span    <= (O_span == 3'd6) ? 3'd0 : (O_span + 3'd1);
+                O_span    <= span_next(O_span);
             end
 
             // KEY2: 视图切换 (SPEC -> SPLIT -> TIME)
@@ -282,7 +332,7 @@ module input_ctrl #(
 
             // KEY3: AUTO Span (从 27MHz 起逐级缩进, 避免混叠误判)
             if (key_press[2]) begin
-                O_span    <= 3'd6;
+                O_span    <= 4'd6;
                 auto_busy <= 1'b1;
                 auto_wait <= 2'd2;
             end else if (auto_busy && pk_fresh) begin
@@ -290,12 +340,21 @@ module input_ctrl #(
                     auto_wait <= auto_wait - 2'd1;
                 end else begin
                     case (O_span)
-                        3'd6: if (I_pk_col < 10'd35)  begin O_span <= 3'd0; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
-                        3'd0: if (I_pk_col < 10'd230) begin O_span <= 3'd1; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
-                        3'd1: if (I_pk_col < 10'd185) begin O_span <= 3'd2; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
-                        3'd2: if (I_pk_col < 10'd185) begin O_span <= 3'd3; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
-                        3'd3: if (I_pk_col < 10'd95)  begin O_span <= 3'd4; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
-                        3'd4: if (I_pk_col < 10'd230) begin O_span <= 3'd5; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd6:  if (I_pk_col < 10'd460) begin O_span <= 4'd11; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd11: if (I_pk_col < 10'd370) begin O_span <= 4'd10; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd10: if (I_pk_col < 10'd460) begin O_span <= 4'd9;  auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd9:  if (I_pk_col < 10'd340) begin O_span <= 4'd0;  auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd0:  if (I_pk_col < 10'd460) begin O_span <= 4'd7;  auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd7:  if (I_pk_col < 10'd370) begin O_span <= 4'd1;  auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd1:  if (I_pk_col < 10'd460) begin O_span <= 4'd8;  auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd8:  if (I_pk_col < 10'd460) begin O_span <= 4'd2;  auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd2:  if (I_pk_col < 10'd370) begin O_span <= 4'd12; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd12: if (I_pk_col < 10'd460) begin O_span <= 4'd3;  auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd3:  if (I_pk_col < 10'd460) begin O_span <= 4'd13; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd13: if (I_pk_col < 10'd370) begin O_span <= 4'd14; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd14: if (I_pk_col < 10'd460) begin O_span <= 4'd4;  auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd4:  if (I_pk_col < 10'd460) begin O_span <= 4'd15; auto_wait <= 2'd2; end else auto_busy <= 1'b0;
+                        4'd15: if (I_pk_col < 10'd370) begin O_span <= 4'd5;  auto_wait <= 2'd2; end else auto_busy <= 1'b0;
                         default: auto_busy <= 1'b0;
                     endcase
                 end
@@ -349,8 +408,7 @@ module input_ctrl #(
             // 编码器旋转
             if (step_up || step_dn) begin
                 if (!O_menu_open) begin
-                    if (step_up) O_span <= (O_span == 3'd6) ? 3'd0 : (O_span + 3'd1);
-                    else         O_span <= (O_span == 3'd0) ? 3'd6 : (O_span - 3'd1);
+                    O_span <= step_up ? span_next(O_span) : span_prev(O_span);
                 end else begin
                     case (O_menu_sel)
                         4'd0: begin
@@ -387,8 +445,7 @@ module input_ctrl #(
                             else         O_avg <= (O_avg == 3'd0) ? 3'd4 : (O_avg - 3'd1);
                         end
                         4'd5: begin
-                            if (step_up) O_span <= (O_span == 3'd6) ? 3'd0 : (O_span + 3'd1);
-                            else         O_span <= (O_span == 3'd0) ? 3'd6 : (O_span - 3'd1);
+                            O_span <= step_up ? span_next(O_span) : span_prev(O_span);
                         end
                         4'd6: begin
                             O_mkr_track <= 1'b0;

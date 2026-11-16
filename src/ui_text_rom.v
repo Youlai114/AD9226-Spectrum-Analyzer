@@ -3,7 +3,7 @@ module ui_text_rom (
     input             I_clk       ,
     input      [6:0]  I_col       , // 0..79
     input      [5:0]  I_row       , // 0..44
-    input      [2:0]  I_span      ,
+    input      [3:0]  I_span      ,
     input      [1:0]  I_win       ,
     input      [1:0]  I_det       ,
     input      [1:0]  I_trc       ,
@@ -105,10 +105,12 @@ module ui_text_rom (
 
     reg [1:0] yscale_r, trc_r, ref_mode_r, view_r;
     reg [2:0] yref_r, trig_r;
-    reg [3:0] vscale_r, tscale_r, trig_lvl_r, lim_lvl_r;
+    reg [3:0] vscale_r, tscale_r, trig_lvl_r, lim_lvl_r, span_r;
     reg       yscale_ref_r, vt_sel_r, trig_sub_r, trc_sub_r, lim_sub_r, lim_fail_r;
     reg [23:0] t_unit_r;
     reg [27:0] y0_str, y1_str, y2_str, y3_str, y4_str;
+    reg [39:0] x1_lbl, x2_lbl, x3_lbl;
+    reg [55:0] x4_lbl;
     reg [48:0] vscl_str, tscl_str, trig_str, tlvl_str, trc2_str, ref2_str;
 
     wire [6:0] yref_db = (yref_r == 3'd1) ? 7'd10 :
@@ -143,6 +145,7 @@ module ui_text_rom (
         yref_r       <= I_yref;
         yscale_ref_r <= I_yscale_ref;
         view_r       <= I_view;
+        span_r       <= I_span;
         lim_lvl_r    <= I_lim_lvl;
         lim_sub_r    <= I_lim_sub;
         lim_fail_r   <= I_lim_fail;
@@ -156,6 +159,32 @@ module ui_text_rom (
         tscale_r     <= I_tscale;
         vt_sel_r     <= I_vt_sel;
         t_unit_r     <= I_t_unit;
+        if (view_r == 2'd2) begin
+            x1_lbl <= {I_tx1_str, 8'h20};
+            x2_lbl <= {I_tx2_str, 8'h20};
+            x3_lbl <= {I_tx3_str, 8'h20};
+            x4_lbl <= {I_tx4_str, t_unit_r[23:8], 8'h20};
+        end else begin
+            case (span_r)
+                4'd0:  begin x1_lbl <= "250k "; x2_lbl <= "500k "; x3_lbl <= "750k "; x4_lbl <= "1MHz   "; end
+                4'd1:  begin x1_lbl <= "50k  "; x2_lbl <= "100k "; x3_lbl <= "150k "; x4_lbl <= "200kHz "; end
+                4'd2:  begin x1_lbl <= "12.5k"; x2_lbl <= "25k  "; x3_lbl <= "37.5k"; x4_lbl <= "50kHz  "; end
+                4'd3:  begin x1_lbl <= "2.5k "; x2_lbl <= "5.0k "; x3_lbl <= "7.5k "; x4_lbl <= "10kHz  "; end
+                4'd4:  begin x1_lbl <= "250  "; x2_lbl <= "500  "; x3_lbl <= "750  "; x4_lbl <= "1kHz   "; end
+                4'd5:  begin x1_lbl <= "50   "; x2_lbl <= "100  "; x3_lbl <= "150  "; x4_lbl <= "200Hz  "; end
+                4'd6:  begin x1_lbl <= "6.75M"; x2_lbl <= "13.5M"; x3_lbl <= "20.2M"; x4_lbl <= "27MHz  "; end
+                4'd7:  begin x1_lbl <= "125k "; x2_lbl <= "250k "; x3_lbl <= "375k "; x4_lbl <= "500kHz "; end
+                4'd8:  begin x1_lbl <= "25k  "; x2_lbl <= "50k  "; x3_lbl <= "75k  "; x4_lbl <= "100kHz "; end
+                4'd9:  begin x1_lbl <= "675k "; x2_lbl <= "1.35M"; x3_lbl <= "2.02M"; x4_lbl <= "2.7MHz "; end
+                4'd10: begin x1_lbl <= "1.35M"; x2_lbl <= "2.70M"; x3_lbl <= "4.05M"; x4_lbl <= "5.4MHz "; end
+                4'd11: begin x1_lbl <= "3.38M"; x2_lbl <= "6.75M"; x3_lbl <= "10.1M"; x4_lbl <= "13.5MHz"; end
+                4'd12: begin x1_lbl <= "5.0k "; x2_lbl <= "10k  "; x3_lbl <= "15k  "; x4_lbl <= "20kHz  "; end
+                4'd13: begin x1_lbl <= "1.25k"; x2_lbl <= "2.5k "; x3_lbl <= "3.75k"; x4_lbl <= "5.0kHz "; end
+                4'd14: begin x1_lbl <= "500  "; x2_lbl <= "1.0k "; x3_lbl <= "1.5k "; x4_lbl <= "2.0kHz "; end
+                4'd15: begin x1_lbl <= "125  "; x2_lbl <= "250  "; x3_lbl <= "375  "; x4_lbl <= "500Hz  "; end
+            endcase
+        end
+
         if (view_r == 2'd2) begin
             y0_str <= {7'h2B, tv_lbl[41:21]};
             y1_str <= {7'h2B, tv_lbl[20:0]};
@@ -268,14 +297,23 @@ module ui_text_rom (
 
     reg [48:0] span_str, rbw_str, swt_str, win_str, det_str, trc_str, avg_str;
     always @(*) begin
-        case (I_span)
-            3'd0: begin span_str = {7'h31, 7'h2E, 7'h30, 7'h30, 7'h4D, 7'h48, 7'h7A}; rbw_str = {7'h31, 7'h2E, 7'h34, 7'h36, 7'h6B, 7'h48, 7'h7A}; swt_str = {7'h32, 7'h2E, 7'h30, 7'h35, 7'h6D, 7'h73}; end
-            3'd1: begin span_str = {7'h32, 7'h35, 7'h30, 7'h6B, 7'h48, 7'h7A, 7'h20}; rbw_str = {7'h33, 7'h36, 7'h36, 7'h48, 7'h7A, 7'h20, 7'h20}; swt_str = {7'h38, 7'h2E, 7'h31, 7'h39, 7'h6D, 7'h73}; end
-            3'd2: begin span_str = {7'h35, 7'h30, 7'h2E, 7'h30, 7'h6B, 7'h48, 7'h7A}; rbw_str = {7'h37, 7'h33, 7'h2E, 7'h32, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h34, 7'h31, 7'h2E, 7'h30, 7'h6D, 7'h73}; end
-            3'd3: begin span_str = {7'h31, 7'h30, 7'h2E, 7'h30, 7'h6B, 7'h48, 7'h7A}; rbw_str = {7'h31, 7'h34, 7'h2E, 7'h36, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h32, 7'h30, 7'h35, 7'h6D, 7'h73, 7'h20}; end
-            3'd4: begin span_str = {7'h31, 7'h2E, 7'h30, 7'h30, 7'h6B, 7'h48, 7'h7A}; rbw_str = {7'h31, 7'h2E, 7'h34, 7'h36, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h30, 7'h2E, 7'h35, 7'h31, 7'h73, 7'h20}; end
-            3'd5: begin span_str = {7'h32, 7'h35, 7'h30, 7'h48, 7'h7A, 7'h20, 7'h20}; rbw_str = {7'h30, 7'h2E, 7'h33, 7'h37, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h31, 7'h2E, 7'h30, 7'h32, 7'h73, 7'h20}; end
-            3'd6: begin span_str = {7'h32, 7'h37, 7'h2E, 7'h30, 7'h4D, 7'h48, 7'h7A}; rbw_str = {7'h33, 7'h39, 7'h2E, 7'h36, 7'h6B, 7'h48, 7'h7A}; swt_str = {7'h37, 7'h35, 7'h2E, 7'h39, 7'h75, 7'h73}; end
+        case (span_r)
+            4'd0:  begin span_str = {7'h31, 7'h2E, 7'h30, 7'h30, 7'h4D, 7'h48, 7'h7A}; rbw_str = {7'h31, 7'h2E, 7'h34, 7'h36, 7'h6B, 7'h48, 7'h7A}; swt_str = {7'h32, 7'h2E, 7'h30, 7'h35, 7'h6D, 7'h73}; end
+            4'd1:  begin span_str = {7'h32, 7'h30, 7'h30, 7'h6B, 7'h48, 7'h7A, 7'h20}; rbw_str = {7'h32, 7'h39, 7'h33, 7'h48, 7'h7A, 7'h20, 7'h20}; swt_str = {7'h31, 7'h30, 7'h2E, 7'h32, 7'h6D, 7'h73}; end
+            4'd2:  begin span_str = {7'h35, 7'h30, 7'h2E, 7'h30, 7'h6B, 7'h48, 7'h7A}; rbw_str = {7'h37, 7'h33, 7'h2E, 7'h32, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h34, 7'h31, 7'h2E, 7'h30, 7'h6D, 7'h73}; end
+            4'd3:  begin span_str = {7'h31, 7'h30, 7'h2E, 7'h30, 7'h6B, 7'h48, 7'h7A}; rbw_str = {7'h31, 7'h34, 7'h2E, 7'h36, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h32, 7'h30, 7'h35, 7'h6D, 7'h73, 7'h20}; end
+            4'd4:  begin span_str = {7'h31, 7'h2E, 7'h30, 7'h30, 7'h6B, 7'h48, 7'h7A}; rbw_str = {7'h31, 7'h2E, 7'h34, 7'h36, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h30, 7'h2E, 7'h35, 7'h31, 7'h73, 7'h20}; end
+            4'd5:  begin span_str = {7'h32, 7'h30, 7'h30, 7'h48, 7'h7A, 7'h20, 7'h20}; rbw_str = {7'h30, 7'h2E, 7'h32, 7'h39, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h30, 7'h2E, 7'h36, 7'h34, 7'h73, 7'h20}; end
+            4'd6:  begin span_str = {7'h32, 7'h37, 7'h2E, 7'h30, 7'h4D, 7'h48, 7'h7A}; rbw_str = {7'h33, 7'h39, 7'h2E, 7'h36, 7'h6B, 7'h48, 7'h7A}; swt_str = {7'h37, 7'h35, 7'h2E, 7'h39, 7'h75, 7'h73}; end
+            4'd7:  begin span_str = {7'h35, 7'h30, 7'h30, 7'h6B, 7'h48, 7'h7A, 7'h20}; rbw_str = {7'h37, 7'h33, 7'h32, 7'h48, 7'h7A, 7'h20, 7'h20}; swt_str = {7'h34, 7'h2E, 7'h31, 7'h30, 7'h6D, 7'h73}; end
+            4'd8:  begin span_str = {7'h31, 7'h30, 7'h30, 7'h6B, 7'h48, 7'h7A, 7'h20}; rbw_str = {7'h31, 7'h34, 7'h36, 7'h48, 7'h7A, 7'h20, 7'h20}; swt_str = {7'h32, 7'h30, 7'h2E, 7'h35, 7'h6D, 7'h73}; end
+            4'd9:  begin span_str = {7'h32, 7'h2E, 7'h37, 7'h30, 7'h4D, 7'h48, 7'h7A}; rbw_str = {7'h33, 7'h2E, 7'h39, 7'h36, 7'h6B, 7'h48, 7'h7A}; swt_str = {7'h37, 7'h35, 7'h39, 7'h75, 7'h73, 7'h20}; end
+            4'd10: begin span_str = {7'h35, 7'h2E, 7'h34, 7'h30, 7'h4D, 7'h48, 7'h7A}; rbw_str = {7'h37, 7'h2E, 7'h39, 7'h31, 7'h6B, 7'h48, 7'h7A}; swt_str = {7'h33, 7'h37, 7'h39, 7'h75, 7'h73, 7'h20}; end
+            4'd11: begin span_str = {7'h31, 7'h33, 7'h2E, 7'h35, 7'h4D, 7'h48, 7'h7A}; rbw_str = {7'h31, 7'h39, 7'h2E, 7'h38, 7'h6B, 7'h48, 7'h7A}; swt_str = {7'h31, 7'h35, 7'h32, 7'h75, 7'h73, 7'h20}; end
+            4'd12: begin span_str = {7'h32, 7'h30, 7'h2E, 7'h30, 7'h6B, 7'h48, 7'h7A}; rbw_str = {7'h32, 7'h39, 7'h2E, 7'h33, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h31, 7'h30, 7'h32, 7'h6D, 7'h73, 7'h20}; end
+            4'd13: begin span_str = {7'h35, 7'h2E, 7'h30, 7'h30, 7'h6B, 7'h48, 7'h7A}; rbw_str = {7'h37, 7'h2E, 7'h33, 7'h32, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h34, 7'h31, 7'h30, 7'h6D, 7'h73, 7'h20}; end
+            4'd14: begin span_str = {7'h32, 7'h2E, 7'h30, 7'h30, 7'h6B, 7'h48, 7'h7A}; rbw_str = {7'h32, 7'h2E, 7'h39, 7'h33, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h30, 7'h2E, 7'h35, 7'h31, 7'h73, 7'h20}; end
+            4'd15: begin span_str = {7'h35, 7'h30, 7'h30, 7'h48, 7'h7A, 7'h20, 7'h20}; rbw_str = {7'h30, 7'h2E, 7'h37, 7'h33, 7'h48, 7'h7A, 7'h20}; swt_str = {7'h30, 7'h2E, 7'h35, 7'h31, 7'h73, 7'h20}; end
             default: begin span_str = 49'd0; rbw_str = 49'd0; swt_str = 49'd0; end
         endcase
         case (I_win)
@@ -306,7 +344,7 @@ module ui_text_rom (
         endcase
     end
 
-    wire [2:0] row39_sel = (view_r == 2'd2) ? 3'd7 : I_span;
+    wire [4:0] row39_sel = (view_r == 2'd2) ? 5'd16 : {1'b0, span_r};
 
     always @(*) begin
         ch_next = 7'h20;
@@ -679,171 +717,30 @@ module ui_text_rom (
                 if (I_col >= 7'd71 && I_col <= 7'd77) begin
                     ch_next = pick7(tscl_str, I_col - 7'd71);
                 end else begin
-                    case (row39_sel)
-                        3'd0: case (I_col)
-                            7'd4: ch_next = 7'h30;
-                            7'd18: ch_next = 7'h32;
-                            7'd19: ch_next = 7'h35;
-                            7'd20: ch_next = 7'h30;
-                            7'd21: ch_next = 7'h6B;
-                            7'd34: ch_next = 7'h35;
-                            7'd35: ch_next = 7'h30;
-                            7'd36: ch_next = 7'h30;
-                            7'd37: ch_next = 7'h6B;
-                            7'd49: ch_next = 7'h37;
-                            7'd50: ch_next = 7'h35;
-                            7'd51: ch_next = 7'h30;
-                            7'd52: ch_next = 7'h6B;
-                            7'd63: ch_next = 7'h31;
-                            7'd64: ch_next = 7'h4D;
-                            7'd65: ch_next = 7'h48;
-                            7'd66: ch_next = 7'h7A;
-                            default: ch_next = 7'h20;
-                        endcase
-                        3'd1: case (I_col)
-                            7'd4: ch_next = 7'h30;
-                            7'd18: ch_next = 7'h36;
-                            7'd19: ch_next = 7'h32;
-                            7'd20: ch_next = 7'h2E;
-                            7'd21: ch_next = 7'h35;
-                            7'd22: ch_next = 7'h6B;
-                            7'd34: ch_next = 7'h31;
-                            7'd35: ch_next = 7'h32;
-                            7'd36: ch_next = 7'h35;
-                            7'd37: ch_next = 7'h6B;
-                            7'd49: ch_next = 7'h31;
-                            7'd50: ch_next = 7'h38;
-                            7'd51: ch_next = 7'h37;
-                            7'd52: ch_next = 7'h6B;
-                            7'd63: ch_next = 7'h32;
-                            7'd64: ch_next = 7'h35;
-                            7'd65: ch_next = 7'h30;
-                            7'd66: ch_next = 7'h6B;
-                            default: ch_next = 7'h20;
-                        endcase
-                        3'd2: case (I_col)
-                            7'd4: ch_next = 7'h30;
-                            7'd18: ch_next = 7'h31;
-                            7'd19: ch_next = 7'h32;
-                            7'd20: ch_next = 7'h2E;
-                            7'd21: ch_next = 7'h35;
-                            7'd22: ch_next = 7'h6B;
-                            7'd34: ch_next = 7'h32;
-                            7'd35: ch_next = 7'h35;
-                            7'd36: ch_next = 7'h6B;
-                            7'd49: ch_next = 7'h33;
-                            7'd50: ch_next = 7'h37;
-                            7'd51: ch_next = 7'h2E;
-                            7'd52: ch_next = 7'h35;
-                            7'd53: ch_next = 7'h6B;
-                            7'd63: ch_next = 7'h35;
-                            7'd64: ch_next = 7'h30;
-                            7'd65: ch_next = 7'h6B;
-                            default: ch_next = 7'h20;
-                        endcase
-                        3'd3: case (I_col)
-                            7'd4: ch_next = 7'h30;
-                            7'd18: ch_next = 7'h32;
-                            7'd19: ch_next = 7'h2E;
-                            7'd20: ch_next = 7'h35;
-                            7'd21: ch_next = 7'h6B;
-                            7'd34: ch_next = 7'h35;
-                            7'd35: ch_next = 7'h2E;
-                            7'd36: ch_next = 7'h30;
-                            7'd37: ch_next = 7'h6B;
-                            7'd49: ch_next = 7'h37;
-                            7'd50: ch_next = 7'h2E;
-                            7'd51: ch_next = 7'h35;
-                            7'd52: ch_next = 7'h6B;
-                            7'd63: ch_next = 7'h31;
-                            7'd64: ch_next = 7'h30;
-                            7'd65: ch_next = 7'h6B;
-                            default: ch_next = 7'h20;
-                        endcase
-                        3'd4: case (I_col)
-                            7'd4: ch_next = 7'h30;
-                            7'd18: ch_next = 7'h32;
-                            7'd19: ch_next = 7'h35;
-                            7'd20: ch_next = 7'h30;
-                            7'd34: ch_next = 7'h35;
-                            7'd35: ch_next = 7'h30;
-                            7'd36: ch_next = 7'h30;
-                            7'd49: ch_next = 7'h37;
-                            7'd50: ch_next = 7'h35;
-                            7'd51: ch_next = 7'h30;
-                            7'd63: ch_next = 7'h31;
-                            7'd64: ch_next = 7'h6B;
-                            7'd65: ch_next = 7'h48;
-                            7'd66: ch_next = 7'h7A;
-                            default: ch_next = 7'h20;
-                        endcase
-                        3'd5: case (I_col)
-                            7'd4: ch_next = 7'h30;
-                            7'd18: ch_next = 7'h36;
-                            7'd19: ch_next = 7'h32;
-                            7'd20: ch_next = 7'h2E;
-                            7'd21: ch_next = 7'h35;
-                            7'd34: ch_next = 7'h31;
-                            7'd35: ch_next = 7'h32;
-                            7'd36: ch_next = 7'h35;
-                            7'd49: ch_next = 7'h31;
-                            7'd50: ch_next = 7'h38;
-                            7'd51: ch_next = 7'h37;
-                            7'd52: ch_next = 7'h2E;
-                            7'd53: ch_next = 7'h35;
-                            7'd63: ch_next = 7'h32;
-                            7'd64: ch_next = 7'h35;
-                            7'd65: ch_next = 7'h30;
-                            7'd66: ch_next = 7'h48;
-                            7'd67: ch_next = 7'h7A;
-                            default: ch_next = 7'h20;
-                        endcase
-                        3'd6: case (I_col)
-                            7'd4: ch_next = 7'h30;
-                            7'd18: ch_next = 7'h36;
-                            7'd19: ch_next = 7'h2E;
-                            7'd20: ch_next = 7'h37;
-                            7'd21: ch_next = 7'h35;
-                            7'd22: ch_next = 7'h4D;
-                            7'd34: ch_next = 7'h31;
-                            7'd35: ch_next = 7'h33;
-                            7'd36: ch_next = 7'h2E;
-                            7'd37: ch_next = 7'h35;
-                            7'd38: ch_next = 7'h4D;
-                            7'd49: ch_next = 7'h32;
-                            7'd50: ch_next = 7'h30;
-                            7'd51: ch_next = 7'h2E;
-                            7'd52: ch_next = 7'h32;
-                            7'd53: ch_next = 7'h4D;
-                            7'd63: ch_next = 7'h32;
-                            7'd64: ch_next = 7'h37;
-                            7'd65: ch_next = 7'h4D;
-                            7'd66: ch_next = 7'h48;
-                            7'd67: ch_next = 7'h7A;
-                            default: ch_next = 7'h20;
-                        endcase
-                        3'd7: case (I_col)
-                            7'd4:  ch_next = 7'h30; // 0
-                            7'd18: ch_next = I_tx1_str[30:24];
-                            7'd19: ch_next = I_tx1_str[22:16];
-                            7'd20: ch_next = I_tx1_str[14:8];
-                            7'd21: ch_next = I_tx1_str[6:0];
-                            7'd34: ch_next = I_tx2_str[30:24];
-                            7'd35: ch_next = I_tx2_str[22:16];
-                            7'd36: ch_next = I_tx2_str[14:8];
-                            7'd37: ch_next = I_tx2_str[6:0];
-                            7'd49: ch_next = I_tx3_str[30:24];
-                            7'd50: ch_next = I_tx3_str[22:16];
-                            7'd51: ch_next = I_tx3_str[14:8];
-                            7'd52: ch_next = I_tx3_str[6:0];
-                            7'd63: ch_next = I_tx4_str[30:24];
-                            7'd64: ch_next = I_tx4_str[22:16];
-                            7'd65: ch_next = I_tx4_str[14:8];
-                            7'd66: ch_next = I_tx4_str[6:0];
-                            7'd67: ch_next = t_unit_r[22:16];
-                            7'd68: ch_next = t_unit_r[14:8];
-                            default: ch_next = 7'h20;
-                        endcase
+                    case (I_col)
+                        7'd4:  ch_next = 7'h30;
+                        7'd18: ch_next = x1_lbl[38:32];
+                        7'd19: ch_next = x1_lbl[30:24];
+                        7'd20: ch_next = x1_lbl[22:16];
+                        7'd21: ch_next = x1_lbl[14:8];
+                        7'd22: ch_next = x1_lbl[6:0];
+                        7'd34: ch_next = x2_lbl[38:32];
+                        7'd35: ch_next = x2_lbl[30:24];
+                        7'd36: ch_next = x2_lbl[22:16];
+                        7'd37: ch_next = x2_lbl[14:8];
+                        7'd38: ch_next = x2_lbl[6:0];
+                        7'd49: ch_next = x3_lbl[38:32];
+                        7'd50: ch_next = x3_lbl[30:24];
+                        7'd51: ch_next = x3_lbl[22:16];
+                        7'd52: ch_next = x3_lbl[14:8];
+                        7'd53: ch_next = x3_lbl[6:0];
+                        7'd63: ch_next = x4_lbl[54:48];
+                        7'd64: ch_next = x4_lbl[46:40];
+                        7'd65: ch_next = x4_lbl[38:32];
+                        7'd66: ch_next = x4_lbl[30:24];
+                        7'd67: ch_next = x4_lbl[22:16];
+                        7'd68: ch_next = x4_lbl[14:8];
+                        7'd69: ch_next = x4_lbl[6:0];
                         default: ch_next = 7'h20;
                     endcase
                 end

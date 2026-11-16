@@ -116,7 +116,7 @@ module video_top (
     //======================================================================
     // 底板按键 / 编码器 / LED 控制
     //======================================================================
-    wire [2:0] span;
+    wire [3:0] span;
     wire [1:0] win, det, trc, ref_mode;
     wire       trc_sub, ref_save_tog;
     wire [2:0] avg;
@@ -195,7 +195,7 @@ module video_top (
     );
 
     // 控制参数同步到 adc_clk 域
-    reg [2:0] span_s0, span_s1;
+    reg [3:0] span_s0, span_s1;
     reg [1:0] win_s0,  win_s1;
     reg [1:0] det_s0,  det_s1;
     reg [1:0] trc_s0,  trc_s1;
@@ -203,7 +203,7 @@ module video_top (
 
     always @(posedge adc_clk or negedge adc_rst_n) begin
         if (!adc_rst_n) begin
-            span_s0 <= 3'd0; span_s1 <= 3'd0;
+            span_s0 <= 4'd0; span_s1 <= 4'd0;
             win_s0  <= 2'd0; win_s1  <= 2'd0;
             det_s0  <= 2'd0; det_s1  <= 2'd0;
             trc_s0  <= 2'd0; trc_s1  <= 2'd0;
@@ -217,23 +217,25 @@ module video_top (
         end
     end
 
-    // 低频档采用 4096 点环形滑窗重叠刷新 (保持 4096 点 RBW 与谐波精度, 提速 4~8 倍)
-    wire [12:0] hop_n = (span_s1 == 3'd5) ? 13'd512  :   // 250Hz 档: 1.02s 刷新
-                        (span_s1 == 3'd4) ? 13'd1024 :   // 1kHz  档: 0.51s 刷新
-                                            13'd4096 ;
+    // 低频档采用 4096 点环形滑窗重叠刷新 (保持 4096 点 RBW 与谐波精度, 提速 2~16 倍)
+    wire [12:0] hop_n = (span_s1 == 4'd5)  ? 13'd256  :   // 200Hz 档: 0.64s 刷新
+                        (span_s1 == 4'd15) ? 13'd512  :   // 500Hz 档: 0.51s 刷新
+                        (span_s1 == 4'd4)  ? 13'd1024 :   // 1kHz  档: 0.51s 刷新
+                        (span_s1 == 4'd14) ? 13'd2048 :   // 2kHz  档: 0.51s 刷新
+                                             13'd4096 ;
 
-    // 0..6 与 ad9226_capture 抽取比完全对应 (6 为 27MHz 宽频直采, 关闭逆 sinc)
-    wire [2:0] dec_sel  = span_s1;
-    wire       mag_flat = (span_s1 == 3'd6);
+    // 0..15 与 ad9226_capture 抽取比完全对应 (6 为 27MHz 宽频直采, 关闭逆 sinc)
+    wire [3:0] dec_sel  = span_s1;
+    wire       mag_flat = (span_s1 == 4'd6);
 
     reg [1:0] avg_k;
     always @(*) begin
         if (avg_s1 == 3'd0) begin
             // Auto: 低 Span 慢扫描直通, 中 Span x4, 高 Span x16
             case (span_s1)
-                3'd4, 3'd5: avg_k = 2'd0;
-                3'd3:       avg_k = 2'd1;
-                default:    avg_k = 2'd2;
+                4'd4, 4'd5, 4'd14, 4'd15: avg_k = 2'd0;
+                4'd3, 4'd12, 4'd13:       avg_k = 2'd1;
+                default:                  avg_k = 2'd2;
             endcase
         end else begin
             avg_k = avg_s1[1:0] - 2'd1;
@@ -278,7 +280,7 @@ module video_top (
         .I_trc         (trc_s1                 ),
         .I_avg_k       (avg_k                  ),
         .I_mag_flat    (mag_flat               ),
-        .I_cfg_id      ({1'b0, span_s1, win_s1, det_s1}),
+        .I_cfg_id      ({span_s1, win_s1, det_s1}),
         .O_cap_start   (cap_start              ),
         .I_smp         (adc_smp                ),
         .I_smp_en      (adc_smp_en             ),

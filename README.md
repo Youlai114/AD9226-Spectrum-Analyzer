@@ -1,11 +1,19 @@
-# AD9226 + HDMI 数字频谱分析仪 v2.0.0（Tang Nano 20K / GW2AR-18）
+# AD9226 + HDMI 数字频谱分析仪 v2.0.1（Tang Nano 20K / GW2AR-18）
 
-[![Release](https://img.shields.io/badge/release-v2.0.0-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
+[![Release](https://img.shields.io/badge/release-v2.0.1-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
 [![Language](https://img.shields.io/badge/HDL-Verilog-orange.svg)](#)
 
 基于 **高云 Tang Nano 20K（GW2AR-18C）** + **AD9226（12bit / 54 MSPS）** 实现的片上数字频谱分析仪与时域示波系统，直接输出 1280×720 HDMI 画面，无需 MCU 或上位机，上电即用。
 
-详细按键与菜单操作请见：[doc/操作手册.md](doc/操作手册.md)。
+- 操作手册：[doc/操作手册.md](doc/操作手册.md)
+- 代码导读：[doc/代码导读.md](doc/代码导读.md)
+
+---
+
+## v2.0.1 更新说明
+- **16 档商用 1-2-5 全范围 Span**：由 7 档扩展为 `200 Hz / 500 Hz / 1.00 kHz / 2.00 kHz / 5.00 kHz / 10.0 kHz / 20.0 kHz / 50.0 kHz / 100 kHz / 200 kHz / 500 kHz / 1.00 MHz / 2.70 MHz / 5.40 MHz / 13.5 MHz / 27.0 MHz`，全面覆盖低频音频、`20 kHz`、中高频方波/脉冲/微分尖峰与 27 MHz 全带宽观察。
+- **低频滑窗提速 & 浅抽取增益修正**：`200 Hz ~ 2 kHz` 档支持 `256~2048` 滑窗重叠刷新（`0.5~0.6s` 刷新）；修正 `2.7M / 5.4M`（`dec_lo`）与 `13.5M`（`dec_div2`）定标移位，并共用 `f_scale_k` 乘法器使 DSP 降至 `61%`。
+- **时序优化**：将 `ui_text_rom` 横坐标刻度字符串预寄存，`74.25 MHz` 像素域 Setup/Hold 违例均为 `0`。
 
 ---
 
@@ -26,7 +34,7 @@
 ### 2. 新增与升级的功能
 | 类别 | v1.x | v2.0.0 |
 | :--- | :--- | :--- |
-| **扫宽（Span）** | 5 档（1M / 250k / 50k / 10k / 27M） | **7 档**（新增 `1 kHz` / `250 Hz` 超窄带）+ `KEY3` **AUTO Span** 自动缩进 |
+| **扫宽（Span）** | 5 档（1M / 250k / 50k / 10k / 27M） | **16 档商用 1-2-5 序列**（`200 Hz ~ 27.0 MHz`）+ `KEY3` **AUTO Span** 自动缩进 |
 | **直流抑制** | 无（0 Hz 存在偏置峰） | **4096 点 IIR 去直流偏置**，自动消除 0 Hz 直流尖峰 |
 | **峰值频率精度** | 整数 bin | **1/8-bin 抛物线亚 bin 内插** |
 | **频标（MARKER）** | 单标 / 差值标 | 新增 **Peak Track（峰值自动追踪）** 与一键吸峰 |
@@ -63,10 +71,10 @@
 
 - **采样与时钟**：`54 MHz` ADC 时钟（27 MHz 晶振倍频），`74.25 MHz` HDMI 像素时钟。
 - **资源占用**（[impl/pnr/Sim_Spectrum.rpt.txt](impl/pnr/Sim_Spectrum.rpt.txt)）：
-  - `Logic`：`13455 / 20736 (65%)`
-  - `Register`：`5300 / 15750 (34%)`
+  - `Logic`：`14220 / 20736 (69%)`
+  - `Register`：`5470 / 15750 (35%)`
   - `BSRAM`：`43 / 46 (94%)`
-  - `DSP`：`18.5 / 24 (78%)`
+  - `DSP`：`14.5 / 24 (61%)`
 - **时序收敛**（[impl/pnr/Sim_Spectrum_tr_content.html](impl/pnr/Sim_Spectrum_tr_content.html)）：Setup 违例端点 `0`，Hold 违例端点 `0`。
 - **即用比特流**：[impl/pnr/Sim_Spectrum.fs](impl/pnr/Sim_Spectrum.fs)。
 
