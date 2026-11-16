@@ -1,0 +1,64 @@
+//Copyright (C)2014-2025 GOWIN Semiconductor Corporation.
+//All rights reserved.
+//File Title: Physical Constraints file
+//Device: GW2AR-18 (Tang Nano 20K)
+//  AD9226 并口采集例程
+//  引脚选择: 避开了 HDMI(33-40)、LED(15-20)、晶振(4)、按键(87,88)
+//  以便与 hdmi_spectrum 频谱仪工程合并使用
+
+// ---- 板载 50MHz 晶振 ----
+IO_LOC "I_clk" 4;
+IO_PORT "I_clk" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+
+// ---- 复位按键 (S1, 按下为低) ----
+IO_LOC "I_rst_n" 88;
+IO_PORT "I_rst_n" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// ---- AD9226 驱动时钟 65MHz -> 模块 CLK ----
+IO_LOC "O_clk_adc" 77;
+IO_PORT "O_clk_adc" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// ---- AD9226 数据总线 D0..D11 (RGB LCD 排针区域) ----
+IO_LOC "I_adc_d[0]" 27;
+IO_PORT "I_adc_d[0]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[1]" 28;
+IO_PORT "I_adc_d[1]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[2]" 29;
+IO_PORT "I_adc_d[2]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[3]" 30;
+IO_PORT "I_adc_d[3]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[4]" 31;
+IO_PORT "I_adc_d[4]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[5]" 32;
+IO_PORT "I_adc_d[5]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[6]" 41;
+IO_PORT "I_adc_d[6]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[7]" 42;
+IO_PORT "I_adc_d[7]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[8]" 48;
+IO_PORT "I_adc_d[8]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+// ---- 板边排针 ----
+IO_LOC "I_adc_d[9]" 69;
+IO_PORT "I_adc_d[9]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[10]" 70;
+IO_PORT "I_adc_d[10]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC "I_adc_d[11]" 71;
+IO_PORT "I_adc_d[11]" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+
+// ---- AD9226 OTR 过压标志 ----
+IO_LOC "I_adc_otr" 25;
+IO_PORT "I_adc_otr" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+// ---- 板载 LED (低电平点亮) ----
+IO_LOC "O_led[0]" 19;
+IO_PORT "O_led[0]" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "O_led[1]" 18;
+IO_PORT "O_led[1]" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "O_led[2]" 17;
+IO_PORT "O_led[2]" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "O_led[3]" 16;
+IO_PORT "O_led[3]" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "O_led[4]" 15;
+IO_PORT "O_led[4]" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "O_led[5]" 20;
+IO_PORT "O_led[5]" IO_TYPE=LVCMOS33 DRIVE=8;

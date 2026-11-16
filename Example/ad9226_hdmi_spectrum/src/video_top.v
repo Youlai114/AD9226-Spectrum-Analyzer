@@ -1,0 +1,748 @@
+// ============================================================================
+// video_top.v  --  AD9226 + HDMI 频谱分析仪 顶层 (Tang Nano 20K / GW2AR-18)
+//
+//   结构:
+//     27MHz ─┬─ TMDS_rPLL -> 371.25MHz ─ CLKDIV/5 -> 74.25MHz 像素时钟 (HDMI)
+//            └─ ad9226_pll -> 54MHz ────────────────> AD9226 CLK + 采样/FFT 时钟
+//
+//     AD9226 12bit ─> ad9226_capture (抽取 27/108/540/2700 -> fs 2M/500k/100k/20k)
+//                     ─> fft4096 (Hann + 4096 点 FFT + 开方求模 + 2 点 1 列)
+//                     ─> spec_data_if ─> spec_ram(乒乓) ─> spec_display
+//                     ─> DVI_TX ─> HDMI
+//
+//   人机界面 (打板版本):
+//     5 个按键 + EC11 旋转编码器 (A/B/SW), 均由 key_enc_ctrl 处理
+//     编码器旋转 = 切跨度 (到头停) / 光标模式下移光标 (短按切精细后步进 1 列)
+//     编码器短按 = 跨度档: 切精细 (FINE, 光标步进 4->1); 光标档: 跳到峰
+//     编码器长按 = Preset, KEY1 = 循环切跨度
+//     KEY2 = 显示模式循环 (频谱+瀑布/纯净频谱/时域波形);
+//     KEY3 = AUTO 自动跨度; KEY4 = 光标三态 (关/普通/增量 Δ);
+//     KEY5 = 窗函数循环 (Hann/Rect/Blackman/FlatTop, 默认 Hann)
+//
+//   显示模式 (KEY2 循环 0/1/2, 两路显示流水线延迟相同, 可无缝切换):
+//     0 频谱+瀑布: FFT 幅度谱 + 谐波标记 + 背景瀑布图 (128 行历史) + 右侧菜单
+//     1 纯净频谱: 菜单折叠成黑、无瀑布, 画面最干净
+//     2 时域波形: wave_cap 边沿触发采 1024 点, 前 256 点 4 倍内插放大绘制
+//
+//   数据源 (localparam USE_ADC):
+//     1 = AD9226 实测数据 (默认)
+//     0 = 内部 200kHz 单音测试数据 (不接 ADC 板也能看到完整界面)
+//
+//   注意: 三个数据源模块必须全部例化。Verilog 里没有被例化的模块会被
+//   高云综合器当成"顶层候选", 出现多个候选时顶层会被乱挑, .cst 全报错。
+// ============================================================================
+module video_top
+(
+    input             I_clk           ,   // 27MHz 晶振 (引脚 4)
+    input             I_rst           ,   // 复位按键 (引脚 88, 按下为高)
+    input      [4:0]  I_key           ,   // 5 个按键 (低有效, 板上 10k 上拉)
+    input             I_enc_a         ,   // EC11 A 相
+    input             I_enc_b         ,   // EC11 B 相
+    input             I_enc_sw        ,   // EC11 按压 (低有效)
+    output     [1:0]  O_led           ,   // LED_STAT / LED_OVR (低电平点亮)
+
+    // ---- HDMI ----
+    output            O_tmds_clk_p    ,
+    output            O_tmds_clk_n    ,
+    output     [2:0]  O_tmds_data_p   ,   // {r,g,b}
+    output     [2:0]  O_tmds_data_n   ,
+
+    // ---- AD9226 并行接口 ----
+    output            O_clk_adc       ,   // 54MHz -> AD9226 CLK
+    input      [11:0] I_adc_d         ,   // AD9226 D0..D11
+    input             I_adc_otr           // AD9226 OTR (过压, 高有效)
+);
+
+    localparam USE_ADC = 1;               // 1: 用 AD9226 实测数据
+
+    wire I_rst_n = ~I_rst;
+
+    //======================================================================
+    // 时钟 1: 27MHz -> 371.25MHz (串行) / 74.25MHz (像素)
+    //======================================================================
+    wire serial_clk;
+    wire pll_lock;
+    wire pix_clk;
+
+    TMDS_rPLL u_tmds_rpll
+    (
+        .clkin  (I_clk     ),
+        .clkout (serial_clk),
+        .lock   (pll_lock  )
+    );
+
+    wire hdmi4_rst_n = I_rst_n & pll_lock;
+
+    CLKDIV u_clkdiv
+    (
+        .RESETN (hdmi4_rst_n),
+        .HCLKIN (serial_clk ),
+        .CLKOUT (pix_clk    ),
+        .CALIB  (1'b1       )
+    );
+    defparam u_clkdiv.DIV_MODE = "5";
+    defparam u_clkdiv.GSREN    = "false";
+
+    //======================================================================
+    // 时钟 2: 27MHz -> 54MHz (AD9226 采样 + 采样/FFT 时钟)
+    //======================================================================
+    wire adc_clk;
+    wire adc_pll_lock;
+
+    ad9226_pll u_adc_pll
+    (
+        .clk_out (adc_clk     ),
+        .locked  (adc_pll_lock),
+        .clkin   (I_clk       )
+    );
+
+    // AD9226 采样时钟直接由 PLL 输出到管脚 (不经 fabric 分频, 抖动最小)
+    assign O_clk_adc = adc_clk;
+
+    // 复位: 异步置位, 同步释放 (54MHz 域)
+    wire adc_rst_n_async = I_rst_n & adc_pll_lock;
+    reg  [2:0] adc_rst_sync;
+
+    always @(posedge adc_clk or negedge adc_rst_n_async) begin
+        if (!adc_rst_n_async) adc_rst_sync <= 3'b000;
+        else                  adc_rst_sync <= {adc_rst_sync[1:0], 1'b1};
+    end
+    wire adc_rst_n = adc_rst_sync[2];
+
+    //======================================================================
+    // 心跳灯
+    //======================================================================
+    reg [31:0] run_cnt;
+
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if (!I_rst_n)
+            run_cnt <= 32'd0;
+        else if (run_cnt >= 32'd27_000_000)
+            run_cnt <= 32'd0;
+        else
+            run_cnt <= run_cnt + 32'd1;
+    end
+
+    wire heartbeat = (run_cnt < 32'd13_500_000);
+
+    //======================================================================
+    // 视频时序 1280x720@60
+    //======================================================================
+    wire        de_in;
+    wire        hs_in;
+    wire        vs_in;
+    wire [11:0] px;
+    wire [11:0] py;
+
+    video_timing #(
+        .H_TOTAL  (1650), .H_SYNC (40), .H_BPORCH (220), .H_RES (1280),
+        .V_TOTAL  (750 ), .V_SYNC (5 ), .V_BPORCH (20 ), .V_RES (720 )
+    ) u_timing (
+        .I_clk   (pix_clk    ),
+        .I_rst_n (hdmi4_rst_n),
+        .O_de    (de_in      ),
+        .O_hs    (hs_in      ),
+        .O_vs    (vs_in      ),
+        .O_x     (px         ),
+        .O_y     (py         )
+    );
+
+    // 场同步上升沿 = 一帧开始
+    reg vs_d;
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n) vs_d <= 1'b0;
+        else              vs_d <= vs_in;
+    end
+    wire frame_tick = vs_in & ~vs_d;
+
+    // 帧同步翻转标志 (给 54MHz 域用; 单拍脉冲跨时钟会丢, 用翻转量更稳)
+    reg frame_tog;
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n)    frame_tog <= 1'b0;
+        else if (frame_tick) frame_tog <= ~frame_tog;
+    end
+
+    //======================================================================
+    // 按键 / 频率跨度 / LED / 显示模式
+    //======================================================================
+    wire [2:0] span;            // 0..6: 1M / 250k / 50k / 10k / 1k / 250 / 27M(宽频)
+
+    wire [4:0] key_press;          // bit0=KEY1 切跨度, bit1=KEY2 切显示模式,
+                                   // bit4=KEY5=Preset; bit2~3 预留
+    // 显示模式 (KEY2 循环): 0=频谱+菜单+瀑布 1=纯净频谱(菜单折叠) 2=时域波形
+    reg [1:0] mode;
+
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n)      mode <= 2'd0;
+        else if (key_press[1]) mode <= (mode == 2'd2) ? 2'd0 : (mode + 2'd1);
+    end
+
+    wire mode_wave  = (USE_ADC != 0) && (mode == 2'd2);
+    wire spec_wf_en = (mode == 2'd0);          // 频谱视图 + 瀑布背景
+    wire spec_hide  = (mode == 2'd1);          // 菜单折叠的纯净频谱
+
+    // 窗函数 (KEY5 循环, 默认 Hann): 0=Hann 1=Rect 2=Blackman 3=FlatTop
+    reg [1:0] win;
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n)      win <= 2'd0;
+        else if (key_press[4]) win <= (win == 2'd3) ? 2'd0 : (win + 2'd1);
+    end
+
+    //------------------------------------------------------------------
+    // 光标 (KEY4 开关): 开启时编码器移光标, 关闭时调跨度
+    //   波形视图下光标无频率意义, 自动隐藏并让编码器回到调跨度
+    //------------------------------------------------------------------
+    reg  [1:0] csr_mode;                  // 0=关 1=普通 2=增量 3=菜单 (KEY4 循环)
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n)                            csr_mode <= 2'd0;
+        else if (key_press[3] && !mode_wave)         csr_mode <= (csr_mode == 2'd3) ? 2'd0 : (csr_mode + 2'd1);
+    end
+    wire csr_en   = (csr_mode == 2'd1) || (csr_mode == 2'd2);   // 菜单态不显示光标
+    wire mode_csr = csr_en & ~mode_wave;
+    wire menu_on  = (csr_mode == 2'd3) && !mode_wave;
+
+    //------------------------------------------------------------------
+    // 右侧菜单 (KEY4 第三下): 编码器旋转 = 选项目, 短按 = 切换该项的值
+    //   BW / Res BW 只读 (BW 由抽取比决定, 手动带宽要改整条抽取链, 收益低)
+    //------------------------------------------------------------------
+    reg  [2:0] menu_sel;                  // 0=ResBW 1=Window 2=Detector 3=Trace 4=Avg 5=Span
+    reg  [1:0] det_sel;                   // 0=正峰 1=平均 2=负峰 3=取样
+    reg  [1:0] trc_sel;                   // 0=Clear 1=MaxHold 2=MinHold 3=View
+    reg  [2:0] avg_sel;                   // 0=Auto 1/4/16/64
+    reg        menu_span_ld;              // 菜单里按 Span 项: 借用 key_enc_ctrl 的载入口
+    reg  [2:0] menu_span_val;
+
+    //------------------------------------------------------------------
+    // 时域视图控制量: 时基缩放 (编码器旋转) / 幅度档 (编码器短按) /
+    //                原始波形开关 (KEY4)   -- 逻辑在 key_enc_ctrl 实例之后
+    //------------------------------------------------------------------
+    reg  [1:0] wave_zoom;                 // 0=1024pt 1=512pt 2=256pt(默认) 3=128pt
+    reg  [2:0] wave_amp;                  // 0=±2V 1=±1V 2=±.5V 3=±.25V 4=±.12V 5=±.06V
+    reg        wave_orig;                 // 1=叠加原始波形 (灰线)
+
+    wire csr_up, csr_dn, sw_press, sw_long, fine;
+    wire enc_up, enc_dn;                   // 编码器原始脉冲 (时域视图改时基用)
+
+    reg  [9:0] csr_col;                    // 光标列 0..1023 (更新逻辑在 CDC 块之后)
+
+    // AUTO (KEY3): 自动跨度, 结果写回 key_enc_ctrl 保持单一跨度源
+    //   3 bit: 跨度档 0..4, 第 4 档是 27MHz 宽频(直采 54MSPS) —— auto_span 在
+    //   f0 > 500kHz 时就会给 4, 位宽少一位会把它截成 0(1MHz 档), AUTO 也就
+    //   "看到宽频信号却跳回 1MHz"
+    wire [2:0] span_auto;
+    wire       span_load;
+
+    // 菜单的 Span 项与 AUTO 共用载入口
+    wire       span_ld  = span_load | menu_span_ld;
+    wire [2:0] span_val = menu_span_ld ? menu_span_val : span_auto;
+
+    // SPAN_NUM=7 覆盖 1M/250k/50k/10k/1k/250/27M 七档.
+    // ★ 必须是 7: 写 5 时 KEY1 只循环 0..4, 新增的 1kHz/250Hz 两档永远选不到
+    key_enc_ctrl #(.SPAN_NUM(7)) u_key (
+        .I_clk           (pix_clk    ),
+        .I_rst_n         (hdmi4_rst_n),
+        .I_key           (I_key      ),
+        .I_enc_a         (I_enc_a    ),
+        .I_enc_b         (I_enc_b    ),
+        .I_enc_sw        (I_enc_sw   ),
+        .I_span_load     (span_ld    ),
+        .I_span_load_val (span_val   ),
+        .I_enc_mode      (mode_csr   ),
+        // 时域视图: 编码器不再改跨度 (改时基缩放), 短按也不翻精细档
+        .I_span_lock     (mode_wave | menu_on),
+        .I_fine_en       (~mode_wave & ~menu_on),
+        .O_csr_up        (csr_up     ),
+        .O_csr_dn        (csr_dn     ),
+        .O_enc_up        (enc_up     ),
+        .O_enc_dn        (enc_dn     ),
+        .O_sw_press      (sw_press   ),
+        .O_sw_long       (sw_long    ),
+        .O_fine          (fine       ),
+        .O_span          (span       ),
+        .O_key_press     (key_press  )
+    );
+
+    //------------------------------------------------------------------
+    // 时域视图: 编码器旋转 = 时基缩放 (记录点数减半),
+    //           编码器短按 = 幅度档循环 (±2V/±1V/±0.5V/±0.25V),
+    //           KEY4       = 原始波形 (灰线) 显示开关
+    //------------------------------------------------------------------
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n) begin
+            wave_zoom <= 2'd2;   // 默认 256 点
+            wave_amp  <= 3'd1;
+            wave_orig <= 1'b1;
+        end else if (mode_wave) begin
+            if (enc_up && (wave_zoom != 2'd3)) wave_zoom <= wave_zoom + 2'd1;
+            if (enc_dn && (wave_zoom != 2'd0)) wave_zoom <= wave_zoom - 2'd1;
+            if (sw_press)                      wave_amp  <= (wave_amp >= 3'd5) ? 3'd0 : wave_amp + 3'd1;
+            if (key_press[3])                  wave_orig <= ~wave_orig;
+        end
+    end
+
+    //======================================================================
+    // AD9226 采集 -> FFT
+    //======================================================================
+    // 跨度 (像素域) 同步到 54MHz 域: 3bit 慢变信号, 2 级同步足够
+    reg [2:0] span_s0, span_s1;
+    always @(posedge adc_clk or negedge adc_rst_n) begin
+        if (!adc_rst_n) begin
+            span_s0 <= 2'd0;
+            span_s1 <= 2'd0;
+        end else begin
+            span_s0 <= span;
+            span_s1 <= span_s0;
+        end
+    end
+    wire cap_start;                        // 来自 fft4096: 开始采一帧
+
+    // 跨度只在每帧采集开始时生效, 避免切换瞬间把一帧采成两种速率的混合
+    reg [2:0] dec_sel;                     // 0:/27(2M) 1:/108(500k) 2:/540(100k) 3:/2700(20k) 4:/1(54M)
+    always @(posedge adc_clk or negedge adc_rst_n) begin
+        if (!adc_rst_n)      dec_sel <= 3'd0;
+        else if (cap_start)  dec_sel <= span_s1;
+    end
+    wire dec_wide = (dec_sel == 3'd6);     // 宽频直采(档 6): FFT 补偿切平
+
+    // 低频中间帧: 只慢三档 (20k/2k/500Hz) 使能 —— 这些档一帧 0.2~8.2s,
+    // 不插中间帧换档后要干等很久; 27M/1M/250k/50k 一帧很短, 不需要
+    wire mid_en_adc = (dec_sel == 3'd3) || (dec_sel == 3'd4) || (dec_sel == 3'd5);
+
+    // 实际视频平均深度: Auto 时快档 16 帧 / 慢档 4 帧, 手动按菜单选
+    wire [1:0] avg_depth = (avg_sel == 3'd0) ? ((dec_sel >= 3'd3) ? 2'd1 : 2'd2) :
+                           (avg_sel == 3'd1) ? 2'd0 :
+                           (avg_sel == 3'd2) ? 2'd1 :
+                           (avg_sel == 3'd3) ? 2'd2 : 2'd3;
+    // 窗选择跨时钟域 (准静态, 2 级同步足够)
+    reg [1:0] win_s0, win_s1;
+    always @(posedge adc_clk or negedge adc_rst_n) begin
+        if (!adc_rst_n) begin
+            win_s0 <= 2'd0;
+            win_s1 <= 2'd0;
+        end else begin
+            win_s0 <= win;
+            win_s1 <= win_s0;
+        end
+    end
+
+    // 帧同步: toggle 同步 + 边沿检测 -> 一屏算一帧
+    reg [1:0] ftog_sync;
+    reg       ftog_d;
+    always @(posedge adc_clk or negedge adc_rst_n) begin
+        if (!adc_rst_n) begin
+            ftog_sync <= 2'b00;
+            ftog_d    <= 1'b0;
+        end else begin
+            ftog_sync <= {ftog_sync[0], frame_tog};
+            ftog_d    <= ftog_sync[1];
+        end
+    end
+    wire adc_frame_req = ftog_sync[1] ^ ftog_d;
+
+    wire [15:0] adc_smp;
+    wire        adc_smp_en;
+    wire        adc_otr;
+
+    ad9226_capture #(.NLOG(11)) u_cap (
+        .I_clk     (adc_clk   ),
+        .I_rst_n   (adc_rst_n ),
+        .I_adc_d   (I_adc_d   ),
+        .I_adc_otr (I_adc_otr ),
+        .I_dec_sel (dec_sel   ),
+        .I_start   (cap_start ),
+        .O_smp     (adc_smp   ),
+        .O_smp_en  (adc_smp_en),
+        .O_otr     (adc_otr   )
+    );
+
+    wire        spec_frame_start_adc;
+    wire        spec_wr_en_adc;
+    wire [9:0]  spec_wr_addr_adc;
+    wire [15:0] spec_wr_mag_adc;
+
+    wire [9:0] fft_hrm_col;
+    wire       fft_hrm_valid;
+    wire       fft_hrm_tog;
+    wire [15:0] fft_h2, fft_h3, fft_h4, fft_h5;
+    wire [15:0] fft_h1;                 // 基波峰幅度 (THD/SNR)
+    wire [35:0] fft_pwr;                // 全带功率 (SNR)
+    wire        fft_mid;                // 本帧是中间帧
+    wire [2:0]  fft_mid_sh;             // 中间帧幅度补偿左移位数
+
+    fft4096 #(.N(4096), .NLOG(12)) u_fft (
+        .I_clk         (adc_clk             ),
+        .I_rst_n       (adc_rst_n           ),
+        .I_frame_req   (adc_frame_req       ),
+        .O_cap_start   (cap_start           ),
+        .O_busy        (                    ),
+        .I_mid_en      (mid_en_adc          ),
+        .O_mid         (fft_mid             ),
+        .O_mid_sh      (fft_mid_sh          ),
+        .I_smp         (adc_smp             ),
+        .I_smp_en      (adc_smp_en          ),
+        .O_frame_start (spec_frame_start_adc),
+        .O_mag_en      (spec_wr_en_adc      ),
+        .O_mag_addr    (spec_wr_addr_adc    ),
+        .O_mag         (spec_wr_mag_adc     ),
+        .O_hrm_col     (fft_hrm_col         ),
+        .O_hrm_valid   (fft_hrm_valid       ),
+        .O_hrm_tog     (fft_hrm_tog         ),
+        .O_h2          (fft_h2              ),
+        .O_h3          (fft_h3              ),
+        .O_h4          (fft_h4              ),
+        .O_h5          (fft_h5              ),
+        .O_h1          (fft_h1              ),
+        .O_pwr         (fft_pwr             ),
+        .I_mag_flat    (dec_wide            ),
+        .I_win         (win_s1              ),
+        .I_det_sel     (det_sel             ),  // 菜单 Detector: 正峰/平均/负峰/取样
+        .I_avg_sel     (avg_depth           ),  // 菜单 Avg: 1/4/16/64 帧 (Auto 按档位选)
+        .I_cfg_id      ({span_s1, win_s1, det_sel})  // 参数指纹: 变化时平均重新预装
+    );
+
+    //------------------------------------------------------------------
+    // 菜单交互: 旋转选项目, 短按改值 (与时域视图互斥)
+    //------------------------------------------------------------------
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n) begin
+            menu_sel     <= 3'd1;          // 默认停在 Window
+            det_sel      <= 2'd0;
+            trc_sel      <= 2'd0;
+            avg_sel      <= 3'd0;          // Auto
+            menu_span_ld <= 1'b0;
+            menu_span_val<= 3'd0;
+        end else begin
+            menu_span_ld <= 1'b0;
+            if (menu_on) begin
+                if (enc_up && (menu_sel != 3'd5)) menu_sel <= menu_sel + 3'd1;
+                if (enc_dn && (menu_sel != 3'd0)) menu_sel <= menu_sel - 3'd1;
+                if (sw_press) begin
+                    case (menu_sel)
+                    3'd1: ;                                        // Window: 用 KEY5
+                    3'd2: det_sel <= det_sel + 2'd1;                // 循环 0..3
+                    3'd3: trc_sel <= trc_sel + 2'd1;                // 循环 0..3
+                    3'd4: avg_sel <= (avg_sel >= 3'd4) ? 3'd0 : (avg_sel + 3'd1);
+                    3'd5: begin                                    // Span: 循环 7 档
+                        menu_span_ld  <= 1'b1;
+                        menu_span_val <= (span >= 3'd6) ? 3'd0 : (span + 3'd1);
+                    end
+                    default: ;                                     // Res BW 只读
+                    endcase
+                end
+            end
+        end
+    end
+
+    //------------------------------------------------------------------
+    // 时域波形采集: 每显示帧 arm 一次 (上一帧没采完则等它采完)
+    //   wave_cap 与 FFT 共用同一样点流, 跨度切换与 FFT 在同一拍生效
+    //------------------------------------------------------------------
+    reg  wave_armed;
+    wire wave_frame_ok;
+    wire wave_arm = adc_frame_req & ~wave_armed;
+
+    always @(posedge adc_clk or negedge adc_rst_n) begin
+        if (!adc_rst_n)            wave_armed <= 1'b0;
+        else if (wave_arm)         wave_armed <= 1'b1;
+        else if (wave_frame_ok)    wave_armed <= 1'b0;
+    end
+
+    wire        wcap_wr_start;
+    wire        wcap_we;
+    wire [9:0]  wcap_addr;
+    wire [15:0] wcap_data;
+
+    wave_cap u_wcap (
+        .I_clk       (adc_clk       ),
+        .I_rst_n     (adc_rst_n     ),
+        .I_smp       (adc_smp       ),
+        .I_smp_en    (adc_smp_en    ),
+        .I_arm       (wave_arm      ),
+        .I_level     (16'sd0        ),   // 触发电平 = 0V (中点)
+        .I_edge      (1'b0          ),   // 上升沿触发
+        .O_addr      (wcap_addr     ),
+        .O_data      (wcap_data     ),
+        .O_we        (wcap_we       ),
+        .O_wr_start  (wcap_wr_start ),
+        .O_frame_ok  (wave_frame_ok ),
+        .O_cnt       (              )
+    );
+
+    //------------------------------------------------------------------
+    // 时域谐波分量: 用同一段采样记录做相关, 估出 1~5 次谐波的复幅度后
+    // 重建 5 条正弦 (屏幕同时显示, 与原始波形同相位/同时间基)
+    //------------------------------------------------------------------
+    wire [2:0]  wave_amp_adc;              // 幅度档同步到 ADC 时钟域
+    wire [1:0]  wave_zoom_adc;             // 时基档同步到 ADC 时钟域 (决定谐波合成步长)
+    reg  [2:0]  amp_s0, amp_s1;
+    reg  [1:0]  zoom_s0, zoom_s1;
+
+    always @(posedge adc_clk or negedge adc_rst_n) begin
+        if (!adc_rst_n) begin
+            amp_s0  <= 3'd1;
+            amp_s1  <= 3'd1;
+            zoom_s0 <= 2'd2;
+            zoom_s1 <= 2'd2;
+        end else begin
+            amp_s0  <= wave_amp;
+            amp_s1  <= amp_s0;
+            zoom_s0 <= wave_zoom;
+            zoom_s1 <= zoom_s0;
+        end
+    end
+    assign wave_amp_adc  = amp_s1;
+    assign wave_zoom_adc = zoom_s1;
+
+    // 无基波时给 0 列: harm_est 内部步进为 0, 各行值停在 256 (显示端也会隐藏迹线)
+    wire [9:0]  hcol_est = fft_hrm_valid ? fft_hrm_col : 10'd0;
+
+    wire        hrm_we;
+    wire [7:0]  hrm_addr;
+    wire [49:0] hrm_rows;
+
+    harm_est u_harm (
+        .I_clk      (adc_clk      ),
+        .I_rst_n    (adc_rst_n    ),
+        .I_wr_en    (wcap_we      ),
+        .I_wr_addr  (wcap_addr    ),
+        .I_wr_data  (wcap_data    ),
+        .I_frame_ok (wave_frame_ok),
+        .I_hcol     (hcol_est     ),
+        .I_amp      (wave_amp_adc ),
+        .I_zoom     (wave_zoom_adc),
+        .O_we       (hrm_we       ),
+        .O_addr     (hrm_addr     ),
+        .O_rows     (hrm_rows     )
+    );
+
+    //------------------------------------------------------------------
+    // 谐波检测跨时钟域: toggle + 2 级同步 + 边沿 -> 锁存稳定的数据总线
+    //   (O_hrm_col/valid 只在 O_hrm_tog 翻转那一拍变化, 边沿到达时总线已稳定)
+    //------------------------------------------------------------------
+    reg [1:0] hrm_tog_s0;
+    reg       hrm_tog_d;
+    reg       hrm_valid_p;
+    reg [9:0] hrm_col_p;
+    reg [2:0] hrm_span_p;              // 测量该峰时的跨度档 (AUTO 换算 f0 用)
+    reg [15:0] h2_p, h3_p, h4_p, h5_p; // 谐波电平 (顶栏 H2..H5 读数)
+    reg [15:0] h1_p;                   // 基波峰幅度
+    reg [35:0] pwr_p;                  // 全带功率
+
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n) begin
+            hrm_tog_s0 <= 2'b00;
+            hrm_tog_d  <= 1'b0;
+            hrm_valid_p <= 1'b0;
+            hrm_col_p  <= 10'd0;
+            hrm_span_p <= 2'd0;
+            h2_p <= 16'd0;  h3_p <= 16'd0;  h4_p <= 16'd0;  h5_p <= 16'd0;
+            h1_p <= 16'd0;  pwr_p <= 36'd0;
+        end else begin
+            hrm_tog_s0 <= {hrm_tog_s0[0], fft_hrm_tog};
+            hrm_tog_d  <= hrm_tog_s0[1];
+            if (hrm_tog_s0[1] ^ hrm_tog_d) begin
+                hrm_valid_p <= fft_hrm_valid;
+                hrm_col_p   <= fft_hrm_col;
+                hrm_span_p  <= span;   // 像素域 span 在帧期间不变, 与测量档一致
+                h2_p <= fft_h2;  h3_p <= fft_h3;
+                h4_p <= fft_h4;  h5_p <= fft_h5;
+                h1_p <= fft_h1;  pwr_p <= fft_pwr;
+            end
+        end
+    end
+
+    // AUTO: 用检测到的基波列 + 测量跨度算目标档, KEY3 按下时加载
+    auto_span u_auto (
+        .I_clk       (pix_clk    ),
+        .I_rst_n     (hdmi4_rst_n),
+        .I_req       (key_press[2]),
+        .I_hrm_valid (hrm_valid_p),
+        .I_hrm_col   (hrm_col_p  ),
+        .I_hrm_span  (hrm_span_p ),
+        .I_span_cur  (span       ),
+        .O_span      (span_auto  ),
+        .O_load      (span_load  )
+    );
+
+    // 光标列更新: 旋转步进 (精细档 1 列, 普通 4 列);
+    // 光标模式下短按压 = 跳到基波峰值列
+    wire [9:0] csr_step = fine ? 10'd1 : 10'd4;
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n)                                  csr_col <= 10'd512;
+        else if (mode_csr && sw_press && hrm_valid_p)      csr_col <= hrm_col_p;
+        else if (csr_up && (csr_col <= 10'd1023 - csr_step))
+                                                           csr_col <= csr_col + csr_step;
+        else if (csr_dn && (csr_col >= csr_step))          csr_col <= csr_col - csr_step;
+    end
+
+    // LED (低电平点亮): LED_STAT 心跳, LED_OVR 过载常亮
+    assign O_led[0] = ~heartbeat;
+    assign O_led[1] = ~adc_otr;
+
+    //======================================================================
+    // 数据源选择
+    //======================================================================
+    wire        spec_wr_clk;
+    wire        spec_wr_rst_n;
+    wire        spec_frame_start;
+    wire        spec_wr_en;
+    wire [9:0]  spec_wr_addr;
+    wire [15:0] spec_wr_mag;
+
+    wire        tone_fs, tone_en, swp_fs, swp_en;
+    wire [9:0]  tone_addr, swp_addr;
+    wire [15:0] tone_mag,  swp_mag;
+
+    spec_tone_gen u_tone (
+        .I_clk         (pix_clk    ),
+        .I_rst_n       (hdmi4_rst_n),
+        // 演示源只在 USE_ADC=0 时有效, 综合时被整块优化掉; tone_rom 只有
+        // 4 层(4096x16), 所以这里显式取低 2 bit —— 宽频档(4)落到第 0 层
+        .I_span        (span[1:0]  ),
+        .I_frame_tick  (frame_tick ),
+        .O_frame_start (tone_fs    ),
+        .O_wr_en       (tone_en    ),
+        .O_wr_addr     (tone_addr  ),
+        .O_wr_mag      (tone_mag   )
+    );
+
+    spec_demo_gen u_sweep (
+        .I_clk         (pix_clk    ),
+        .I_rst_n       (hdmi4_rst_n),
+        .I_frame_tick  (frame_tick ),
+        .O_frame_start (swp_fs     ),
+        .O_wr_en       (swp_en     ),
+        .O_wr_addr     (swp_addr   ),
+        .O_wr_mag      (swp_mag    )
+    );
+
+    assign spec_wr_clk      = USE_ADC ? adc_clk            : pix_clk;
+    assign spec_wr_rst_n    = USE_ADC ? adc_rst_n          : hdmi4_rst_n;
+    assign spec_frame_start = USE_ADC ? spec_frame_start_adc : tone_fs;
+    assign spec_wr_en       = USE_ADC ? spec_wr_en_adc       : tone_en;
+    assign spec_wr_addr     = USE_ADC ? spec_wr_addr_adc     : tone_addr;
+    // 中间帧只用了前 K 点 + 补零, 幅度按 4096/K 左移补偿。
+    // ★ 补偿必须放在这个写侧, 不能在 u_fft 的 O_mag 上再加逻辑:
+    //   u_fft/gain_r_10_s0 -> u_fft/O_mag_* 只有 +0.168ns 余量 (全设计最差)
+    wire [20:0] mag_shift       = {5'd0, spec_wr_mag_adc} << fft_mid_sh;
+    wire [15:0] spec_mag_scaled = (|mag_shift[20:16]) ? 16'hFFFF : mag_shift[15:0];
+    assign spec_wr_mag      = USE_ADC ? (fft_mid ? spec_mag_scaled : spec_wr_mag_adc)
+                                      : tone_mag;
+    wire        spec_wr_mid = USE_ADC ? fft_mid : 1'b0;
+
+    //======================================================================
+    // 频谱 / 波形显示 (两个模块 6 级流水线延迟相同, 输出可无缝切换)
+    //======================================================================
+    wire [7:0] spec_r, spec_g, spec_b;
+    wire [7:0] wave_r, wave_g, wave_b;
+
+    spec_display u_display (
+        .I_pix_clk     (pix_clk         ),
+        .I_pix_rst_n   (hdmi4_rst_n     ),
+        .I_x           (px              ),
+        .I_y           (py              ),
+        .I_span        (span            ),
+        .I_hrm_valid   (hrm_valid_p     ),
+        .I_hrm_col     (hrm_col_p       ),
+        .I_hrm_span    (hrm_span_p      ),
+        .I_csr_en      (csr_en & ~mode_wave),
+        // 必须是完整的 2bit csr_mode (1=普通 2=增量Δ): spec_display 内部按 2'd1/
+        // 2'd2 判模式并锁存 Δ 参考线, 早先这里接的是 1bit 的 mode_csr, 于是显示端
+        // 永远看不到 2, 增量 ΔF/ΔdB 模式形同不存在。波形视图由 I_csr_en 关掉即可,
+        // 这里不再多加一级 mux (像素域时序已贴极限)
+        .I_csr_mode    (csr_mode        ),
+        .I_menu_on     (menu_on         ),
+        .I_menu_sel    (menu_sel        ),
+        .I_det_sel     (det_sel         ),
+        .I_trc_sel     (trc_sel         ),
+        .I_avg_sel     (avg_sel         ),
+        .I_h2          (h2_p            ),
+        .I_h3          (h3_p            ),
+        .I_h4          (h4_p            ),
+        .I_h5          (h5_p            ),
+        .I_h1          (h1_p            ),
+        .I_pwr         (pwr_p           ),
+        .I_csr_col     (csr_col         ),
+        .I_menu_hide   (spec_hide       ),
+        .I_win         (win             ),
+        .I_fine        (fine            ),
+        .I_wr_clk      (spec_wr_clk     ),
+        .I_wr_rst_n    (spec_wr_rst_n   ),
+        .I_frame_start (spec_frame_start),
+        .I_mid         (spec_wr_mid     ),
+        .I_wr_en       (spec_wr_en      ),
+        .I_wr_addr     (spec_wr_addr    ),
+        .I_wr_mag      (spec_wr_mag     ),
+        .O_r           (spec_r          ),
+        .O_g           (spec_g          ),
+        .O_b           (spec_b          )
+    );
+
+    wave_display u_wdisp (
+        .I_pix_clk     (pix_clk         ),
+        .I_pix_rst_n   (hdmi4_rst_n     ),
+        .I_x           (px              ),
+        .I_y           (py              ),
+        .I_span        (span            ),
+        .I_amp         (wave_amp        ),
+        .I_zoom        (wave_zoom       ),
+        .I_orig        (wave_orig       ),
+        .I_hvalid      (hrm_valid_p     ),
+        .I_wr_clk      (adc_clk         ),
+        .I_wr_rst_n    (adc_rst_n       ),
+        .I_frame_start (wcap_wr_start   ),
+        .I_wr_en       (wcap_we         ),
+        .I_wr_addr     (wcap_addr       ),
+        .I_wr_mag      (wcap_data       ),
+        .I_hwe         (hrm_we          ),
+        .I_haddr       (hrm_addr        ),
+        .I_hrows       (hrm_rows        ),
+        .O_r           (wave_r          ),
+        .O_g           (wave_g          ),
+        .O_b           (wave_b          )
+    );
+
+    wire [7:0] disp_r = mode_wave ? wave_r : spec_r;
+    wire [7:0] disp_g = mode_wave ? wave_g : spec_g;
+    wire [7:0] disp_b = mode_wave ? wave_b : spec_b;
+
+    //======================================================================
+    // 显示输出与同步信号对齐 (显示流水线延迟 5 拍)
+    //======================================================================
+    reg [5:0] de_d;
+    reg [5:0] hs_d;
+    reg [5:0] vs_dly;
+
+    always @(posedge pix_clk or negedge hdmi4_rst_n) begin
+        if (!hdmi4_rst_n) begin
+            de_d   <= 6'b000000;
+            hs_d   <= 6'b000000;
+            vs_dly <= 6'b000000;
+        end else begin
+            de_d   <= {de_d[4:0],   de_in};
+            hs_d   <= {hs_d[4:0],   hs_in};
+            vs_dly <= {vs_dly[4:0], vs_in};
+        end
+    end
+
+    //======================================================================
+    // TMDS 发送
+    //======================================================================
+    DVI_TX_Top DVI_TX_Top_inst
+    (
+        .I_rst_n       (hdmi4_rst_n   ),
+        .I_serial_clk  (serial_clk    ),
+        .I_rgb_clk     (pix_clk       ),
+        .I_rgb_vs      (vs_dly[5]     ),
+        .I_rgb_hs      (hs_d[5]       ),
+        .I_rgb_de      (de_d[5]       ),
+        .I_rgb_r       (disp_r        ),
+        .I_rgb_g       (disp_g        ),
+        .I_rgb_b       (disp_b        ),
+        .O_tmds_clk_p  (O_tmds_clk_p  ),
+        .O_tmds_clk_n  (O_tmds_clk_n  ),
+        .O_tmds_data_p (O_tmds_data_p ),
+        .O_tmds_data_n (O_tmds_data_n )
+    );
+
+endmodule

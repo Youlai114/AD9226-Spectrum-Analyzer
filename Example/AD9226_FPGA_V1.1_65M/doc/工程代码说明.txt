@@ -1,0 +1,1 @@
+代码所用芯片EP4CE15F17C8,基于Quartus II 11.0 软件，工程文件是：.\AD9226_FPGA_V1.0\prjAD9226TEST.qpf,使用Quartus II 11.0 及以上版本打开即可。

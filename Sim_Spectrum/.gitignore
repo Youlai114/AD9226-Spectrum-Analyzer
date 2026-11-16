@@ -1,0 +1,11 @@
+# Gowin IDE / build artifacts
+impl/*
+!impl/pnr/
+impl/pnr/*
+!impl/pnr/Sim_Spectrum.fs
+!impl/pnr/Sim_Spectrum.rpt.txt
+!impl/pnr/Sim_Spectrum_tr_content.html
+*.user
+build.log
+.DS_Store
+Thumbs.db

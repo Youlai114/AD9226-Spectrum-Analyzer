@@ -1,11 +1,34 @@
-# Gowin IDE / build artifacts
-impl/*
-!impl/pnr/
-impl/pnr/*
-!impl/pnr/Sim_Spectrum.fs
-!impl/pnr/Sim_Spectrum.rpt.txt
-!impl/pnr/Sim_Spectrum_tr_content.html
-*.user
-build.log
-.DS_Store
+# 构建产物 / 中间文件：Example 下只保留源码、约束、文档与仿真 TB
+Example/**/impl/
+Example/**/sim/work/
+Example/**/sim/transcript
+Example/**/sim/out/
+Example/**/*.ppm
+Example/**/*.user
+Example/**/*.log
+Example/**/*.pof
+Example/**/*.bit
+Example/**/*.sof
+Example/**/*.vg
+Example/**/*.vo
+Example/**/*.bak
+Example/**/.workbuddy*/
+Example/**/prj/db/
+Example/**/prj/incremental_db/
+Example/**/prj/greybox_tmp/
+Example/**/prj/output_files/
+Example/**/prj/simulation/
+Example/**/*.rpt
+Example/**/*.smsg
+Example/**/*.summary
+Example/**/*.sdo
+Example/**/*.done
+Example/**/*.jdi
+
+# 通用临时文件
+*.bak
 Thumbs.db
+.DS_Store
+__pycache__/
+_*.py
+_b*.log

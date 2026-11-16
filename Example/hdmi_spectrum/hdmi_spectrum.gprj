@@ -1,0 +1,22 @@
+<?xml version="1" encoding="UTF-8"?>
+<!DOCTYPE gowin-fpga-project>
+<Project>
+    <Template>FPGA</Template>
+    <Version>5</Version>
+    <Device name="GW2AR-18C" pn="GW2AR-LV18QN88C8/I7">gw2ar18c-000</Device>
+    <FileList>
+        <File path="src/video_top.v" type="file.verilog" enable="1"/>
+        <File path="src/video_timing.v" type="file.verilog" enable="1"/>
+        <File path="src/key_ctrl.v" type="file.verilog" enable="1"/>
+        <File path="src/spec_display.v" type="file.verilog" enable="1"/>
+        <File path="src/spec_data_if.v" type="file.verilog" enable="1"/>
+        <File path="src/spec_ram.v" type="file.verilog" enable="1"/>
+        <File path="src/spec_demo_gen.v" type="file.verilog" enable="1"/>
+        <File path="src/ui_font_rom.v" type="file.verilog" enable="1"/>
+        <File path="src/ui_text_rom.v" type="file.verilog" enable="1"/>
+        <File path="src/dvi_tx/dvi_tx.v" type="file.verilog" enable="1"/>
+        <File path="src/gowin_rpll/TMDS_rPLL.v" type="file.verilog" enable="1"/>
+        <File path="src/hdmi_spectrum.cst" type="file.cst" enable="1"/>
+        <File path="src/nano_20k_video.sdc" type="file.sdc" enable="1"/>
+    </FileList>
+</Project>
