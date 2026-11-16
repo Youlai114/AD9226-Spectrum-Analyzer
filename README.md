@@ -1,5 +1,6 @@
 # AD9226 + HDMI 数字频谱分析仪 v2.0.1（Tang Nano 20K / GW2AR-18）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v2.0.1-blue.svg)](https://github.com/Youlai114/AD9226-Spectrum-Analyzer/releases)
 [![Language](https://img.shields.io/badge/HDL-Verilog-orange.svg)](#)
 
